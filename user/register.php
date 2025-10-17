@@ -15,7 +15,9 @@ require_once __DIR__ . '/../includes/header.php';
   </div>
   <div class="mb-3">
     <label class="form-label">Email</label>
-    <input name="email" type="email" class="form-control" required>
+    <input name="email" type="email" class="form-control" required 
+           placeholder="e.g., yourname@university.edu.ph">
+    <div class="form-text">Enter your school email or personal email address</div>
   </div>
   <div class="mb-3">
     <label class="form-label">Contact number</label>
@@ -37,5 +39,16 @@ require_once __DIR__ . '/../includes/header.php';
     <a href="/board-in/user/login.php" class="btn btn-outline-secondary">Login</a>
   </div>
 </form>
+
+<script>
+document.querySelector('input[name="email"]').addEventListener('invalid', function(e) {
+  e.preventDefault();
+  this.setCustomValidity('Please enter a valid email address (e.g., yourname@university.edu.ph)');
+});
+
+document.querySelector('input[name="email"]').addEventListener('input', function() {
+  this.setCustomValidity('');
+});
+</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

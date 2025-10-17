@@ -1,198 +1,330 @@
 <?php
-require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/session.php';
-require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../config/config.php';
+require_once __DIR__ . '/../includes/auth.php';
 
-if (!isset($_SESSION['user'])) {
-	flash('error', 'You must be logged in to create a listing');
-	header('Location: /board-in/user/login.php');
-	exit;
+// Require landlord or admin role
+require_role(['landlord', 'admin']);
+
+// Check if form was submitted
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header('Location: /board-in/bh_manager/add-listing.php');
+    exit;
 }
 
-$title = trim($_POST['title'] ?? '');
-$name = trim($_POST['name'] ?? '') ?: $title;
-$address = trim($_POST['address'] ?? '');
-$description = trim($_POST['description'] ?? '');
+$user_id = $_SESSION['user']['id'] ?? null;
 
-$latitude = null;
-$longitude = null;
+// Validate required fields
+$required_fields = ['title', 'room_type'];
+foreach ($required_fields as $field) {
+    if (empty($_POST[$field])) {
+        $_SESSION['error'] = "Required field missing: " . ucfirst(str_replace('_', ' ', $field));
+        header('Location: /board-in/pages/add-listing.php');
+        exit;
+    }
+}
+
+// Sanitize and prepare form data
+$title = $conn->real_escape_string(trim($_POST['title']));
+$name = !empty($_POST['name']) ? $conn->real_escape_string(trim($_POST['name'])) : $title;
+$address = !empty($_POST['address']) ? $conn->real_escape_string(trim($_POST['address'])) : '';
+$city = !empty($_POST['city']) ? $conn->real_escape_string(trim($_POST['city'])) : '';
+$contact_phone = !empty($_POST['contact_phone']) ? $conn->real_escape_string(trim($_POST['contact_phone'])) : '';
+
+// Financial fields
 $monthly_rent = !empty($_POST['monthly_rent']) ? floatval($_POST['monthly_rent']) : 0.00;
 $security_deposit = !empty($_POST['security_deposit']) ? floatval($_POST['security_deposit']) : 0.00;
-$total_rooms = !empty($_POST['total_rooms']) ? intval($_POST['total_rooms']) : 0;
-$available_rooms = !empty($_POST['available_rooms']) ? intval($_POST['available_rooms']) : 0;
-$gender_allowed = in_array($_POST['gender_allowed'] ?? '', ['male','female','both']) ? $_POST['gender_allowed'] : 'both';
-$house_rules = trim($_POST['house_rules'] ?? '');
-$curfew_time = !empty($_POST['curfew_time']) ? $_POST['curfew_time'] : null;
-$status = in_array($_POST['status'] ?? '', ['available','full','inactive']) ? $_POST['status'] : 'available';
 
+// Room details
+$room_type = $conn->real_escape_string($_POST['room_type']);
+$available_rooms = !empty($_POST['available_rooms']) ? intval($_POST['available_rooms']) : 1;
+$total_rooms = !empty($_POST['total_rooms']) ? intval($_POST['total_rooms']) : $available_rooms;
+$gender_allowed = !empty($_POST['gender_allowed']) ? $conn->real_escape_string($_POST['gender_allowed']) : 'both';
+
+// Optional fields
+$description = !empty($_POST['description']) ? $conn->real_escape_string(trim($_POST['description'])) : '';
+$house_rules = !empty($_POST['house_rules']) ? $conn->real_escape_string(trim($_POST['house_rules'])) : '';
+$curfew_time = !empty($_POST['curfew_time']) ? $conn->real_escape_string($_POST['curfew_time']) : NULL;
+$status = !empty($_POST['status']) ? $conn->real_escape_string($_POST['status']) : 'available';
+
+// Amenities (checkboxes)
 $wifi = isset($_POST['wifi']) ? 1 : 0;
-$laundry = isset($_POST['laundry']) ? 1 : 0;
-$kitchen = isset($_POST['kitchen']) ? 1 : 0;
-$bipsu = isset($_POST['bipsu']) ? 1 : 0;
 $own_cr = isset($_POST['own_cr']) ? 1 : 0;
 $shared_kitchen = isset($_POST['shared_kitchen']) ? 1 : 0;
+$laundry = isset($_POST['laundry']) ? 1 : 0;
 $parking = isset($_POST['parking']) ? 1 : 0;
 $study_area = isset($_POST['study_area']) ? 1 : 0;
 $air_conditioning = isset($_POST['air_conditioning']) ? 1 : 0;
 $water_heater = isset($_POST['water_heater']) ? 1 : 0;
+$close_to_bipsu = isset($_POST['bipsu']) ? 1 : 0;
 
-if (empty($title)) {
-	flash('error', 'Title is required');
-	header('Location: /board-in/bh_manager/add-listing.php');
-	exit;
-}
+// Set default values for compatibility with existing schema
+$province = 'Biliran'; // Default province
+$location = $city; // Use city as location
 
-$manager_id = $_SESSION['user']['id'];
+// Start transaction
+$conn->begin_transaction();
 
-// Geo features removed: latitude/longitude are no longer collected or geocoded
-
-// We'll wrap the boarding_houses + amenities + photos inserts in a DB transaction
-$createdFiles = [];
 try {
-	$conn->begin_transaction();
+    // Insert into boarding_houses table (without location field to avoid conflicts)
+    $sql = "INSERT INTO boarding_houses (
+        user_id, 
+        landlord_id,
+        title, 
+        name, 
+        address, 
+        city, 
+        province,
+        contact_phone,
+        monthly_rent, 
+        security_deposit, 
+        price,
+        room_type, 
+        available_rooms, 
+        total_rooms, 
+        gender_allowed, 
+        description, 
+        house_rules, 
+        curfew_time, 
+        status,
+        wifi,
+        parking,
+        laundry,
+        aircon,
+        water_heater,
+        close_to_bipsu,
+        created_at
+    ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()
+    )";
+    
+    $stmt = $conn->prepare($sql);
+    
+    if (!$stmt) {
+        throw new Exception("Prepare failed: " . $conn->error);
+    }
+    
+    // Bind parameters
+    $landlord_id = $user_id; // same for now
 
-	// insert into boarding_houses using new schema (keep manager_id for compatibility)
-	// Insert listing (latitude/longitude no longer included)
-	$cols = ['manager_id','landlord_id','title','name','address','monthly_rent','security_deposit','available_rooms','total_rooms','gender_allowed','description','house_rules','curfew_time','status'];
-	$placeholders = array_fill(0, count($cols), '?');
-	$bind_types_main = 'iisssddiisssss';
-	// Build bind values in correct order
-	$bind_values_main = [$manager_id, $manager_id, $title, $name, $address, $monthly_rent, $security_deposit, $available_rooms, $total_rooms, $gender_allowed, $description, $house_rules, $curfew_time, $status];
+$stmt->bind_param(
+    "iissssssdddsiisssssiiiiii",
+    $user_id,
+    $landlord_id,
+    $title,
+    $name,
+    $address,
+    $city,
+    $province,
+    $contact_phone,
+    $monthly_rent,
+    $security_deposit,
+    $monthly_rent,     // price
+    $room_type,
+    $available_rooms,
+    $total_rooms,
+    $gender_allowed,
+    $description,
+    $house_rules,
+    $curfew_time,
+    $status,
+    $wifi,
+    $parking,
+    $laundry,
+    $air_conditioning,
+    $water_heater,
+    $close_to_bipsu
+);
 
-	$sqlInsert = 'INSERT INTO boarding_houses (' . implode(', ', $cols) . ') VALUES (' . implode(', ', $placeholders) . ')';
-	$stmt = $conn->prepare($sqlInsert);
-	if (!$stmt) throw new Exception('Prepare failed: ' . $conn->error . ' SQL: ' . $sqlInsert);
-	// bind params dynamically
-	if ($bind_types_main !== '') {
-		$refs = [];
-		foreach ($bind_values_main as $k => $v) $refs[$k] = &$bind_values_main[$k];
-		array_unshift($refs, $bind_types_main);
-		if (!call_user_func_array([$stmt, 'bind_param'], $refs)) {
-			throw new Exception('Bind failed: ' . $stmt->error);
-		}
-	}
-	if (!$stmt->execute()) {
-		throw new Exception('Execute failed (boarding_houses): ' . $stmt->error);
-	}
-
-	$listing_id = $conn->insert_id;
-
-	// create amenities row
-	$stmtA = $conn->prepare('INSERT INTO amenities (boarding_house_id, wifi, own_cr, shared_kitchen, laundry_area, parking, study_area, air_conditioning, water_heater) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
-	if (!$stmtA) throw new Exception('Prepare failed (amenities): ' . $conn->error);
-	if (!$stmtA->bind_param('iiiiiiiii', $listing_id, $wifi, $own_cr, $shared_kitchen, $laundry, $parking, $study_area, $air_conditioning, $water_heater)) {
-		throw new Exception('Bind failed (amenities): ' . $stmtA->error);
-	}
-	if (!$stmtA->execute()) {
-		throw new Exception('Execute failed (amenities): ' . $stmtA->error);
-	}
-
-	// handle uploads into photos (and legacy images for compatibility)
-	if (!empty($_FILES['images']) && is_array($_FILES['images']['name'])) {
-		$maxFiles = 6; // limit to 6 images
-		$count = min(count($_FILES['images']['name']), $maxFiles);
-		$uploadDir = __DIR__ . '/../uploads/' . $listing_id;
-		if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true)) {
-			throw new Exception('Failed to create upload directory');
-		}
-
-		$allowed = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif'];
-
-		for ($i = 0; $i < $count; $i++) {
-			$name = $_FILES['images']['name'][$i];
-			$tmp = $_FILES['images']['tmp_name'][$i];
-			$err = $_FILES['images']['error'][$i];
-			$size = $_FILES['images']['size'][$i];
-
-			if ($err !== UPLOAD_ERR_OK) continue;
-			if ($size > 5 * 1024 * 1024) continue; // max 5MB
-
-			$finfo = finfo_open(FILEINFO_MIME_TYPE);
-			$mime = finfo_file($finfo, $tmp);
-			finfo_close($finfo);
-			if (!isset($allowed[$mime])) continue;
-
-			$ext = $allowed[$mime];
-			$basename = bin2hex(random_bytes(8)) . '.' . $ext;
-			$target = $uploadDir . DIRECTORY_SEPARATOR . $basename;
-			if (move_uploaded_file($tmp, $target)) {
-				$createdFiles[] = $target;
-
-				// insert into new photos table
-				$stmt2 = $conn->prepare('INSERT INTO photos (boarding_house_id, photo_url, is_primary) VALUES (?, ?, ?)');
-				if (!$stmt2) throw new Exception('Prepare failed (photos): ' . $conn->error);
-				$is_primary = ($i === 0) ? 1 : 0;
-				$url = '/board-in/uploads/' . $listing_id . '/' . $basename;
-				if (!$stmt2->bind_param('isi', $listing_id, $url, $is_primary)) {
-					throw new Exception('Bind failed (photos): ' . $stmt2->error);
-				}
-				if (!$stmt2->execute()) {
-					throw new Exception('Execute failed (photos): ' . $stmt2->error);
-				}
-
-				// also insert into legacy images table for backward compatibility
-				$stmt3 = $conn->prepare('INSERT INTO images (listing_id, filename) VALUES (?, ?)');
-				if (!$stmt3) throw new Exception('Prepare failed (images): ' . $conn->error);
-				if (!$stmt3->bind_param('is', $listing_id, $basename)) {
-					throw new Exception('Bind failed (images): ' . $stmt3->error);
-				}
-				if (!$stmt3->execute()) {
-					throw new Exception('Execute failed (images): ' . $stmt3->error);
-				}
-			}
-		}
-	}
-
-	$conn->commit();
-
-	flash('success', 'Listing created');
-	header('Location: /board-in/bh_manager/my-listings.php');
-	exit;
-
+    
+    if (!$stmt->execute()) {
+        throw new Exception("Execute failed: " . $stmt->error);
+    }
+    
+    $boarding_house_id = $conn->insert_id;
+    $stmt->close();
+    
+    // Insert into amenities table
+    $sql_amenities = "INSERT INTO amenities (
+        boarding_house_id,
+        wifi,
+        own_cr,
+        shared_kitchen,
+        laundry_area,
+        parking,
+        study_area,
+        air_conditioning,
+        water_heater
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    
+    $stmt_amenities = $conn->prepare($sql_amenities);
+    
+    if (!$stmt_amenities) {
+        throw new Exception("Amenities prepare failed: " . $conn->error);
+    }
+    
+    $stmt_amenities->bind_param(
+        "iiiiiiiii",
+        $boarding_house_id,
+        $wifi,
+        $own_cr,
+        $shared_kitchen,
+        $laundry,
+        $parking,
+        $study_area,
+        $air_conditioning,
+        $water_heater
+    );
+    
+    if (!$stmt_amenities->execute()) {
+        throw new Exception("Amenities execute failed: " . $stmt_amenities->error);
+    }
+    
+    $stmt_amenities->close();
+    
+    // Handle image uploads
+    if (!empty($_FILES['images']['name'][0])) {
+        $upload_dir = __DIR__ . '/../uploads/listings/';
+        
+        // Create directory if it doesn't exist
+        if (!file_exists($upload_dir)) {
+            mkdir($upload_dir, 0755, true);
+        }
+        
+        $allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+        $max_file_size = 5 * 1024 * 1024; // 5MB
+        $max_images = 10;
+        
+        $uploaded_count = 0;
+        $is_first_image = true;
+        
+        foreach ($_FILES['images']['tmp_name'] as $key => $tmp_name) {
+            if ($uploaded_count >= $max_images) {
+                break;
+            }
+            
+            if (empty($tmp_name) || $_FILES['images']['error'][$key] !== UPLOAD_ERR_OK) {
+                continue;
+            }
+            
+            // Validate file type
+            $file_type = $_FILES['images']['type'][$key];
+            if (!in_array($file_type, $allowed_types)) {
+                continue;
+            }
+            
+            // Validate file size
+            if ($_FILES['images']['size'][$key] > $max_file_size) {
+                continue;
+            }
+            
+            // Generate unique filename
+            $extension = pathinfo($_FILES['images']['name'][$key], PATHINFO_EXTENSION);
+            $filename = 'listing_' . $boarding_house_id . '_' . time() . '_' . $uploaded_count . '.' . $extension;
+            $filepath = $upload_dir . $filename;
+            
+            // Move uploaded file
+            if (move_uploaded_file($tmp_name, $filepath)) {
+                $image_path = '/board-in/uploads/listings/' . $filename;
+                $is_primary = $is_first_image ? 1 : 0;
+                
+                // Try to insert into images table (with listing_id column)
+                try {
+                    $sql_image = "INSERT INTO images (listing_id, filename) VALUES (?, ?)";
+                    $stmt_image = $conn->prepare($sql_image);
+                    if ($stmt_image) {
+                        $stmt_image->bind_param("is", $boarding_house_id, $filename);
+                        $stmt_image->execute();
+                        $stmt_image->close();
+                    }
+                } catch (Exception $e) {
+                    // Skip if table doesn't exist or column is different
+                    if (DEBUG) {
+                        error_log("Images table insert skipped: " . $e->getMessage());
+                    }
+                }
+                
+                // Insert into bh_images table
+                try {
+                    $sql_bh_image = "INSERT INTO bh_images (bh_id, image_path, is_primary) VALUES (?, ?, ?)";
+                    $stmt_bh_image = $conn->prepare($sql_bh_image);
+                    if ($stmt_bh_image) {
+                        $stmt_bh_image->bind_param("isi", $boarding_house_id, $image_path, $is_primary);
+                        $stmt_bh_image->execute();
+                        $stmt_bh_image->close();
+                    }
+                } catch (Exception $e) {
+                    if (DEBUG) {
+                        error_log("BH Images table insert skipped: " . $e->getMessage());
+                    }
+                }
+                
+                // Insert into photos table
+                try {
+                    $sql_photo = "INSERT INTO photos (boarding_house_id, photo_url, is_primary) VALUES (?, ?, ?)";
+                    $stmt_photo = $conn->prepare($sql_photo);
+                    if ($stmt_photo) {
+                        $stmt_photo->bind_param("isi", $boarding_house_id, $image_path, $is_primary);
+                        $stmt_photo->execute();
+                        $stmt_photo->close();
+                    }
+                } catch (Exception $e) {
+                    if (DEBUG) {
+                        error_log("Photos table insert skipped: " . $e->getMessage());
+                    }
+                }
+                
+                // Update boarding_houses.image with first image
+                if ($is_first_image) {
+                    $sql_update_main = "UPDATE boarding_houses SET image = ? WHERE id = ?";
+                    $stmt_update = $conn->prepare($sql_update_main);
+                    $stmt_update->bind_param("si", $image_path, $boarding_house_id);
+                    $stmt_update->execute();
+                    $stmt_update->close();
+                    
+                    $is_first_image = false;
+                }
+                
+                $uploaded_count++;
+            }
+        }
+    }
+    
+    // Commit transaction
+    $conn->commit();
+    
+    // Log activity
+    $action = "Added new listing";
+    $description = "Created boarding house listing: $title";
+    $ip_address = $_SERVER['REMOTE_ADDR'];
+    $user_agent = $_SERVER['HTTP_USER_AGENT'];
+    
+    $sql_log = "INSERT INTO activity_logs (user_id, action, description, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)";
+    $stmt_log = $conn->prepare($sql_log);
+    if ($stmt_log) {
+        $stmt_log->bind_param("issss", $user_id, $action, $description, $ip_address, $user_agent);
+        $stmt_log->execute();
+        $stmt_log->close();
+    }
+    
+    // Set success message
+    $_SESSION['success'] = "Listing added successfully!";
+    header('Location: /board-in/bh_manager/my-listings.php');
+    exit;
+    
 } catch (Exception $e) {
-	// rollback DB and cleanup any moved files
-	if ($conn->connect_errno === 0) {
-		$conn->rollback();
-	}
-	foreach ($createdFiles as $f) {
-		if (file_exists($f)) @unlink($f);
-	}
-	if (isset($uploadDir) && is_dir($uploadDir)) {
-		@rmdir($uploadDir); // only removes if empty
-	}
-	// Log full error for debugging
-	error_log('process-add.php transaction failed: ' . $e->getMessage());
-
-	// Derive a short, user-friendly reason without exposing internals
-	$err = $e->getMessage();
-	$publicReason = 'An internal error occurred';
-	if (stripos($err, 'Failed to create upload directory') !== false) {
-		$publicReason = 'Failed to create upload directory (check disk permissions)';
-	} elseif (stripos($err, 'Bind failed') !== false) {
-		$publicReason = 'Failed to process form data (invalid input)';
-	} elseif (stripos($err, 'Execute failed (photos)') !== false || stripos($err, 'Execute failed (images)') !== false) {
-		$publicReason = 'Failed to save uploaded images';
-	} elseif (stripos($err, 'Execute failed (amenities)') !== false) {
-		$publicReason = 'Failed to save listing amenities';
-	} elseif (stripos($err, 'Execute failed (boarding_houses)') !== false || stripos($err, 'Prepare failed') !== false) {
-		$publicReason = 'Failed to save listing to the database';
-	} elseif (stripos($err, 'random_bytes') !== false) {
-		$publicReason = 'Failed to generate secure filename for upload';
-	} else {
-		// Fallback: show a short sanitized excerpt of the error (no newlines, limited length)
-		$clean = preg_replace('/[^a-zA-Z0-9 \-_,.:;()\/\\]/', '', $err);
-		$clean = preg_replace('/\s+/', ' ', $clean);
-		$publicReason = strlen($clean) > 120 ? substr($clean, 0, 117) . '...' : $clean;
-		if ($publicReason === '') $publicReason = 'An internal error occurred';
-	}
-
-	// If DEBUG is enabled, show full error message to assist local debugging
-	if (defined('DEBUG') && DEBUG) {
-		// Show full exception (escaped by flash rendering)
-		flash('error', 'Failed to create listing: ' . $err);
-	} else {
-		flash('error', 'Failed to create listing: ' . $publicReason);
-	}
-	header('Location: /board-in/bh_manager/add-listing.php');
-	exit;
+    // Rollback transaction on error
+    $conn->rollback();
+    
+    // Log error if debug mode
+    if (DEBUG) {
+        error_log("Error adding listing: " . $e->getMessage());
+        $_SESSION['error'] = "Error adding listing: " . $e->getMessage();
+    } else {
+        $_SESSION['error'] = "An error occurred while adding the listing. Please try again.";
+    }
+    
+    header('Location: /board-in/bh_manager/add-listing.php');
+    exit;
 }
+?>
