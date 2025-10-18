@@ -18,6 +18,19 @@ define('PLATFORM_GCASH_NUMBER', '');
 define('PAYMENT_PROVIDER_SECRET', ''); // e.g. PayMongo webhook secret or shared token
 define('PLATFORM_COMMISSION_RATE', 0.03); // 3% commission by default
 
+// Upload directories
+define('UPLOAD_DIR', $_SERVER['DOCUMENT_ROOT'] . '/board-in/uploads/');
+define('PROFILE_UPLOAD_DIR', UPLOAD_DIR . 'profiles/');
+define('PROFILE_UPLOAD_URL', '/board-in/uploads/profiles/');
+
+// Create upload directories if they don't exist
+if (!file_exists(UPLOAD_DIR)) {
+    mkdir(UPLOAD_DIR, 0777, true);
+}
+if (!file_exists(PROFILE_UPLOAD_DIR)) {
+    mkdir(PROFILE_UPLOAD_DIR, 0777, true);
+}
+
 // ============================================
 // AUTO-INSTALLATION FEATURE
 // This checks if database exists, if not, creates it automatically
@@ -49,14 +62,38 @@ function auto_install_database() {
         // Tables don't exist, create them
         create_all_tables($conn_check);
         insert_sample_data($conn_check);
+    } else {
+        // Tables exist, check if profile columns exist
+        update_users_table_for_profiles($conn_check);
     }
     
     $conn_check->close();
 }
 
+function update_users_table_for_profiles($conn) {
+    // Add new profile-related columns if they don't exist
+    $columns_to_add = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS address VARCHAR(255) DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS date_of_birth DATE DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS gender ENUM('male', 'female', 'other', 'prefer_not_to_say') DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS student_id VARCHAR(50) DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS school VARCHAR(255) DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS facebook_url VARCHAR(255) DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS twitter_url VARCHAR(255) DEFAULT NULL",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS linkedin_url VARCHAR(255) DEFAULT NULL"
+    ];
+    
+    foreach ($columns_to_add as $query) {
+        // Try to add column, ignore if it already exists
+        @$conn->query($query);
+    }
+}
+
 function create_all_tables($conn) {
     $queries = [
-        // USERS TABLE
+        // USERS TABLE - Enhanced with profile fields
         "CREATE TABLE IF NOT EXISTS users (
             id INT(11) AUTO_INCREMENT PRIMARY KEY,
             email VARCHAR(255) NOT NULL UNIQUE,
@@ -68,9 +105,19 @@ function create_all_tables($conn) {
             role ENUM('tenant', 'landlord', 'admin') DEFAULT 'tenant',
             user_type ENUM('student','landlord','admin') DEFAULT 'student',
             profile_picture VARCHAR(255),
+            bio TEXT DEFAULT NULL,
+            address VARCHAR(255) DEFAULT NULL,
+            date_of_birth DATE DEFAULT NULL,
+            gender ENUM('male', 'female', 'other', 'prefer_not_to_say') DEFAULT NULL,
+            student_id VARCHAR(50) DEFAULT NULL,
+            school VARCHAR(255) DEFAULT NULL,
+            facebook_url VARCHAR(255) DEFAULT NULL,
+            twitter_url VARCHAR(255) DEFAULT NULL,
+            linkedin_url VARCHAR(255) DEFAULT NULL,
             status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
             email_verified TINYINT(1) DEFAULT 0,
             verification_token VARCHAR(255) DEFAULT NULL,
+            last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_email (email),

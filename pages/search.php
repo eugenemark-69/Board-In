@@ -115,6 +115,31 @@ $pages = max(1, ceil($total / $perPage));
 
 ?>
 
+<style>
+.listing-thumb {
+	width: 100%;
+	height: 250px;
+	object-fit: cover;
+	object-position: center;
+}
+
+.card {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+
+.card-body {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.card-body > :last-child {
+	margin-top: auto;
+}
+</style>
+
 <h2>Search Listings</h2>
 <form class="mb-4" method="get">
 	<div class="row g-2 align-items-center">
@@ -153,7 +178,7 @@ $pages = max(1, ceil($total / $perPage));
 	</div>
 </form>
 
-<?php if ($res->num_rows === 0): ?>
+ <?php if ($res->num_rows === 0): ?>
 	<p>No results found.</p>
 <?php else: ?>
 	<div class="row">
@@ -161,47 +186,90 @@ $pages = max(1, ceil($total / $perPage));
 		<div class="col-md-4">
 			<div class="card mb-3">
 					<?php
-					// image src: try local upload first, fall back to Unsplash when missing
-					$localImg = '/board-in/uploads/' . $row['id'] . '/' . ($row['filename'] ?? '');
-					$fallback = unsplash_url('boarding-house', 600, 400);
-					?>
-					<img src="<?php echo $localImg; ?>" onerror="this.onerror=null;this.src='<?php echo $fallback; ?>'" class="card-img-top listing-thumb">
+					// Determine which image to use
+					if (!empty($row['image'])) {
+    				// If a full image path is stored on the boarding_houses table
+    					$localImg = $row['image'];
+					} elseif (!empty($row['filename'])) {
+    				// If filename is stored in the images table
+    					$localImg = '/board-in/uploads/listings/' . $row['filename'];
+					} else {
+    				// Fallback to Unsplash
+    					$localImg = unsplash_url('boarding-house', 600, 400);
+				}
+				?>
+				<img src="<?php echo htmlspecialchars($localImg); ?>" class="card-img-top listing-thumb" alt="Boarding House Image">
+
 				<div class="card-body">
 					<h5 class="card-title"><?php echo esc_attr($row['title']); ?></h5>
-					<p class="card-text"><?php echo htmlspecialchars(strlen($row['description'])>200?substr($row['description'],0,200).'...':$row['description']); ?></p>
-					<div class="mb-2 small text-muted d-flex gap-2 align-items-center">
+					
+					<!-- Location/Address -->
+					<?php if (!empty($row['address']) || !empty($row['location'])): ?>
+						<p class="text-muted small mb-2">
+							<i class="bi bi-geo-alt"></i> 
+							<?php echo htmlspecialchars($row['address'] ?? $row['location']); ?>
+						</p>
+					<?php endif; ?>
+					
+					<!-- Description -->
+					<p class="card-text"><?php echo htmlspecialchars(strlen($row['description'])>120?substr($row['description'],0,120).'...':$row['description']); ?></p>
+					
+					<!-- Room Type & Gender -->
+					<div class="mb-2 small">
+						<?php if (!empty($row['room_type'])): ?>
+							<span class="badge bg-secondary me-1">
+								<i class="bi bi-door-open"></i> <?php echo ucfirst($row['room_type']); ?>
+							</span>
+						<?php endif; ?>
+						<?php if (!empty($row['gender_allowed'])): ?>
+							<span class="badge bg-info">
+								<?php 
+								$gender_icon = $row['gender_allowed'] === 'male' ? 'bi-gender-male' : 
+											   ($row['gender_allowed'] === 'female' ? 'bi-gender-female' : 'bi-gender-ambiguous');
+								?>
+								<i class="bi <?php echo $gender_icon; ?>"></i> <?php echo ucfirst($row['gender_allowed']); ?>
+							</span>
+						<?php endif; ?>
+					</div>
+					
+					<!-- Amenities -->
+					<div class="mb-2 small text-muted d-flex gap-2 flex-wrap align-items-center">
 						<?php if (isset($row['wifi']) && $row['wifi']): ?>
 							<span title="WiFi" class="badge bg-light text-dark border"><i class="bi bi-wifi"></i> WiFi</span>
 						<?php endif; ?>
 						<?php if (isset($row['laundry']) && $row['laundry']): ?>
-							<span title="Laundry" class="badge bg-light text-dark border"><i class="bi bi-cloud-drizzle"></i> Laundry</span>
+							<span title="Laundry" class="badge bg-light text-dark border"><i class="bi bi-droplet"></i> Laundry</span>
 						<?php endif; ?>
 						<?php if (isset($row['kitchen']) && $row['kitchen']): ?>
-							<span title="Kitchen" class="badge bg-light text-dark border"><i class="bi bi-suit-heart"></i> Kitchen</span>
+							<span title="Kitchen" class="badge bg-light text-dark border"><i class="bi bi-egg-fried"></i> Kitchen</span>
+						<?php endif; ?>
+						<?php if (isset($row['parking']) && $row['parking']): ?>
+							<span title="Parking" class="badge bg-light text-dark border"><i class="bi bi-car-front"></i> Parking</span>
 						<?php endif; ?>
 						<?php if (isset($row['close_to_bipsu']) && $row['close_to_bipsu']): ?>
-							<span title="Close to BIPSU" class="badge bg-light text-dark border"><i class="bi bi-geo-alt"></i> BIPSU</span>
+							<span title="Close to BIPSU" class="badge bg-primary"><i class="bi bi-mortarboard"></i> Near BIPSU</span>
 						<?php endif; ?>
 					</div>
-					<a href="/board-in/pages/listing.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-primary">View</a>
+					
+					<!-- Availability -->
+					<?php if (isset($row['available_rooms']) && isset($row['total_rooms'])): ?>
+						<p class="small text-muted mb-2">
+							<i class="bi bi-door-closed"></i> 
+							<?php echo $row['available_rooms']; ?> / <?php echo $row['total_rooms']; ?> rooms available
+						</p>
+					<?php endif; ?>
+					
+					<!-- Price and View Button -->
+					<div class="d-flex justify-content-between align-items-center mt-3">
+						<h4 class="text-primary mb-0">
+							₱<?php echo number_format($row['price'] ?? $row['monthly_rent'], 2); ?><small class="text-muted fw-normal">/month</small>
+						</h4>
+						<a href="/board-in/pages/listing.php?id=<?php echo $row['id']; ?>" class="btn btn-primary">View Details</a>
+					</div>
 				</div>
 			</div>
 		</div>
 	<?php endwhile; ?>
 	</div>
-
-	<nav>
-		<ul class="pagination">
-			<?php for ($i=1;$i<=$pages;$i++): 
-				$qp = $_GET;
-				$qp['page'] = $i;
-				$qs = http_build_query($qp);
-			?>
-				<li class="page-item <?php echo $i== $page? 'active':''; ?>"><a class="page-link" href="?<?php echo $qs; ?>"><?php echo $i; ?></a></li>
-			<?php endfor; ?>
-		</ul>
-	</nav>
-
-<?php endif; ?>
-
+	<?php endif; ?>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
