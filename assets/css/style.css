@@ -475,3 +475,10 @@ img[onerror]::before {
     visibility: visible;
     transform: translateX(-50%) translateY(-4px);
 }
+.navbar {
+  z-index: 1500 !important;
+}
+
+.dropdown-menu {
+  z-index: 2000 !important;
+}

@@ -236,7 +236,8 @@
       .alert-info {
         background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
         color: #1e40af;
-        border-left: 4px solid #3b82f6;
+        border-left:
+        4px solid #3b82f6;
       }
       
       .alert-info::before {
@@ -331,7 +332,7 @@
 <?php if (isset($_SESSION['user'])): ?>
             <li class="nav-item">
               <a class="nav-link" href="/board-in/pages/search.php">
-                <i class="bi bi-search me-1"></i>Search
+                <i class="bi bi-search me-1"></i>Browse
               </a>
             </li>
 <?php endif; ?>
@@ -345,11 +346,6 @@
               <li class="nav-item">
                 <a class="nav-link" href="/board-in/student/booking.php">
                   <i class="bi bi-calendar-check me-1"></i>Bookings
-                </a>
-              </li>
-              <li class="nav-item">
-                <a class="nav-link" href="/board-in/student/reviews.php">
-                  <i class="bi bi-star me-1"></i>Reviews
                 </a>
               </li>
               <li class="nav-item">
@@ -383,6 +379,11 @@
               </a>
               <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
                 <li>
+                  <a class="dropdown-item" href="/board-in/pages/profile.php">
+                    <i class="bi bi-person me-2"></i>My Profile
+                  </a>
+                </li>
+                <li>
                   <a class="dropdown-item" href="/board-in/user/settings.php">
                     <i class="bi bi-gear me-2"></i>Settings
                   </a>
@@ -390,6 +391,11 @@
                 <li>
                   <a class="dropdown-item" href="/board-in/student/notifications.php">
                     <i class="bi bi-bell me-2"></i>Notifications
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="/board-in/student/reviews.php">
+                    <i class="bi bi-star me-1"></i>Reviews
                   </a>
                 </li>
                 <li>
