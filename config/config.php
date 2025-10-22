@@ -152,7 +152,6 @@ function create_all_tables($conn) {
             title VARCHAR(255) NOT NULL,
             description TEXT,
             address VARCHAR(255) NOT NULL,
-            location VARCHAR(100) NOT NULL,
             city VARCHAR(100) NOT NULL,
             province VARCHAR(50) NOT NULL,
             latitude DECIMAL(10, 7),
@@ -185,7 +184,6 @@ function create_all_tables($conn) {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE SET NULL,
-            INDEX idx_location (location),
             INDEX idx_city (city),
             INDEX idx_price (price),
             INDEX idx_room_type (room_type),
@@ -290,7 +288,6 @@ function create_all_tables($conn) {
             booking_id INT DEFAULT NULL,
             rating INT(1) NOT NULL CHECK (rating >= 1 AND rating <= 5),
             cleanliness_rating TINYINT DEFAULT NULL,
-            location_rating TINYINT DEFAULT NULL,
             value_rating TINYINT DEFAULT NULL,
             landlord_rating TINYINT DEFAULT NULL,
             comment TEXT,
@@ -378,6 +375,18 @@ function insert_sample_data($conn) {
         "INSERT INTO users (username, email, password, full_name, phone, role, user_type, status) VALUES
         ('landlord1', 'landlord@example.com', '\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Doe', '09123456789', 'landlord', 'landlord', 'active')",
         
+        "INSERT INTO users (username, email, password, full_name, role, user_type, status)
+            VALUES (
+            'admin',
+            'admin@boardin.com',
+            'admin',
+            'System Administrator',
+            'admin',
+            'admin',
+            'active'
+            )",
+
+
         "INSERT INTO users (username, email, password, full_name, phone, role, user_type, status) VALUES
         ('tenant1', 'tenant@example.com', '\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Jane Smith', '09987654321', 'tenant', 'student', 'active')"
     ];

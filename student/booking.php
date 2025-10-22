@@ -56,10 +56,7 @@ if (!$listing) {
         <label class="form-check-label" for="agree_terms">I agree to the terms and conditions</label>
     </div>
     <button class="btn btn-primary">Pay with GCash (simulate)</button>
-	<div style="height: 1000px;">
-
 	
-	</div>
 
 </form>
 
