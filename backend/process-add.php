@@ -19,7 +19,7 @@ $required_fields = ['title', 'room_type'];
 foreach ($required_fields as $field) {
     if (empty($_POST[$field])) {
         $_SESSION['error'] = "Required field missing: " . ucfirst(str_replace('_', ' ', $field));
-        header('Location: /board-in/pages/add-listing.php');
+        header('Location: /board-in/bh_manager/add-listing.php');
         exit;
     }
 }
@@ -45,7 +45,9 @@ $gender_allowed = !empty($_POST['gender_allowed']) ? $conn->real_escape_string($
 $description = !empty($_POST['description']) ? $conn->real_escape_string(trim($_POST['description'])) : '';
 $house_rules = !empty($_POST['house_rules']) ? $conn->real_escape_string(trim($_POST['house_rules'])) : '';
 $curfew_time = !empty($_POST['curfew_time']) ? $conn->real_escape_string($_POST['curfew_time']) : NULL;
-$status = !empty($_POST['status']) ? $conn->real_escape_string($_POST['status']) : 'available';
+
+// CRITICAL FIX: Always set status to 'pending' for new listings
+$status = 'pending';
 
 // Amenities (checkboxes)
 $wifi = isset($_POST['wifi']) ? 1 : 0;
@@ -59,14 +61,14 @@ $water_heater = isset($_POST['water_heater']) ? 1 : 0;
 $close_to_bipsu = isset($_POST['bipsu']) ? 1 : 0;
 
 // Set default values for compatibility with existing schema
-$province = 'Biliran'; // Default province
-$location = $city; // Use city as location
+$province = 'Biliran';
+
 
 // Start transaction
 $conn->begin_transaction();
 
 try {
-    // Insert into boarding_houses table (without location field to avoid conflicts)
+    // Insert into boarding_houses table
     $sql = "INSERT INTO boarding_houses (
         user_id, 
         landlord_id,
@@ -105,37 +107,38 @@ try {
     }
     
     // Bind parameters
-    $landlord_id = $user_id; // same for now
+    $landlord_id = $user_id;
 
-$stmt->bind_param(
-    "iissssssdddsiisssssiiiiii",
-    $user_id,
-    $landlord_id,
-    $title,
-    $name,
-    $address,
-    $city,
-    $province,
-    $contact_phone,
-    $monthly_rent,
-    $security_deposit,
-    $monthly_rent,     // price
-    $room_type,
-    $available_rooms,
-    $total_rooms,
-    $gender_allowed,
-    $description,
-    $house_rules,
-    $curfew_time,
-    $status,
-    $wifi,
-    $parking,
-    $laundry,
-    $air_conditioning,
-    $water_heater,
-    $close_to_bipsu
-);
-
+    // CORRECTED TYPE STRING - 26 characters for 26 parameters
+    // ii=2, sssssss=7, ddd=3, s=1, ii=2, ssss=4, s=1, iiiiii=6 → Total=26
+    $stmt->bind_param(
+        "iisssssssdddsiiisssiiiiii",
+        $user_id,
+        $landlord_id,
+        $title,
+        $name,
+        $address,
+        $city,
+        $province,             // 8  - s
+        $contact_phone,        // 9  - s
+        $monthly_rent,         // 10 - d
+        $security_deposit,     // 11 - d
+        $monthly_rent,         // 12 - d (price = monthly_rent)
+        $room_type,            // 13 - s
+        $available_rooms,      // 14 - i
+        $total_rooms,          // 15 - i
+        $gender_allowed,       // 16 - s
+        $description,          // 17 - s
+        $house_rules,          // 18 - s
+        $curfew_time,          // 19 - s
+        $status,               // 20 - s
+        $wifi,                 // 21 - i
+        $parking,              // 22 - i
+        $laundry,              // 23 - i
+        $air_conditioning,     // 24 - i
+        $water_heater,         // 25 - i
+        $close_to_bipsu        // 26 - i
+    );
     
     if (!$stmt->execute()) {
         throw new Exception("Execute failed: " . $stmt->error);
@@ -186,7 +189,6 @@ $stmt->bind_param(
     if (!empty($_FILES['images']['name'][0])) {
         $upload_dir = __DIR__ . '/../uploads/listings/';
         
-        // Create directory if it doesn't exist
         if (!file_exists($upload_dir)) {
             mkdir($upload_dir, 0755, true);
         }
@@ -207,28 +209,24 @@ $stmt->bind_param(
                 continue;
             }
             
-            // Validate file type
             $file_type = $_FILES['images']['type'][$key];
             if (!in_array($file_type, $allowed_types)) {
                 continue;
             }
             
-            // Validate file size
             if ($_FILES['images']['size'][$key] > $max_file_size) {
                 continue;
             }
             
-            // Generate unique filename
             $extension = pathinfo($_FILES['images']['name'][$key], PATHINFO_EXTENSION);
             $filename = 'listing_' . $boarding_house_id . '_' . time() . '_' . $uploaded_count . '.' . $extension;
             $filepath = $upload_dir . $filename;
             
-            // Move uploaded file
             if (move_uploaded_file($tmp_name, $filepath)) {
                 $image_path = '/board-in/uploads/listings/' . $filename;
                 $is_primary = $is_first_image ? 1 : 0;
                 
-                // Try to insert into images table (with listing_id column)
+                // Try to insert into images table
                 try {
                     $sql_image = "INSERT INTO images (listing_id, filename) VALUES (?, ?)";
                     $stmt_image = $conn->prepare($sql_image);
@@ -238,8 +236,7 @@ $stmt->bind_param(
                         $stmt_image->close();
                     }
                 } catch (Exception $e) {
-                    // Skip if table doesn't exist or column is different
-                    if (DEBUG) {
+                    if (defined('DEBUG') && DEBUG) {
                         error_log("Images table insert skipped: " . $e->getMessage());
                     }
                 }
@@ -254,7 +251,7 @@ $stmt->bind_param(
                         $stmt_bh_image->close();
                     }
                 } catch (Exception $e) {
-                    if (DEBUG) {
+                    if (defined('DEBUG') && DEBUG) {
                         error_log("BH Images table insert skipped: " . $e->getMessage());
                     }
                 }
@@ -269,7 +266,7 @@ $stmt->bind_param(
                         $stmt_photo->close();
                     }
                 } catch (Exception $e) {
-                    if (DEBUG) {
+                    if (defined('DEBUG') && DEBUG) {
                         error_log("Photos table insert skipped: " . $e->getMessage());
                     }
                 }
@@ -295,7 +292,7 @@ $stmt->bind_param(
     
     // Log activity
     $action = "Added new listing";
-    $description = "Created boarding house listing: $title";
+    $description = "Created boarding house listing: $title (Status: Pending Admin Approval)";
     $ip_address = $_SERVER['REMOTE_ADDR'];
     $user_agent = $_SERVER['HTTP_USER_AGENT'];
     
@@ -307,17 +304,32 @@ $stmt->bind_param(
         $stmt_log->close();
     }
     
-    // Set success message
-    $_SESSION['success'] = "Listing added successfully!";
+    // Create notification for admin
+    $admin_query = "SELECT id FROM users WHERE role = 'admin' LIMIT 1";
+    $admin_result = $conn->query($admin_query);
+    if ($admin_result && $admin_row = $admin_result->fetch_assoc()) {
+        $admin_id = $admin_row['id'];
+        $notif_title = "New Listing Pending Approval";
+        $notif_message = "A new listing '$title' has been submitted by " . ($_SESSION['user']['full_name'] ?? $_SESSION['user']['username']) . " and requires your approval.";
+        $notif_type = "info";
+        $notif_link = "/board-in/admin/dashboard.php";
+        
+        $stmt_notif = $conn->prepare("INSERT INTO notifications (user_id, title, message, type, link) VALUES (?, ?, ?, ?, ?)");
+        if ($stmt_notif) {
+            $stmt_notif->bind_param("issss", $admin_id, $notif_title, $notif_message, $notif_type, $notif_link);
+            $stmt_notif->execute();
+            $stmt_notif->close();
+        }
+    }
+    
+    $_SESSION['success'] = "Listing submitted successfully! Your listing is now pending admin approval and will be visible to students once approved.";
     header('Location: /board-in/bh_manager/my-listings.php');
     exit;
     
 } catch (Exception $e) {
-    // Rollback transaction on error
     $conn->rollback();
     
-    // Log error if debug mode
-    if (DEBUG) {
+    if (defined('DEBUG') && DEBUG) {
         error_log("Error adding listing: " . $e->getMessage());
         $_SESSION['error'] = "Error adding listing: " . $e->getMessage();
     } else {

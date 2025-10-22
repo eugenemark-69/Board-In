@@ -5,7 +5,7 @@ require_once __DIR__ . '/../includes/header.php';
 
 $id = intval($_GET['id'] ?? 0);
 if ($id <= 0) {
-    flash('error', 'Listing not found');
+    $_SESSION['error'] = 'Listing not found';
     header('Location: /board-in/pages/search.php');
     exit;
 }
@@ -15,11 +15,27 @@ $stmt->bind_param('i', $id);
 $stmt->execute();
 $res = $stmt->get_result();
 $listing = $res->fetch_assoc();
+
 if (!$listing) {
-    flash('error', 'Listing not found');
+    $_SESSION['error'] = 'Listing not found';
     header('Location: /board-in/pages/search.php');
     exit;
 }
+
+// CRITICAL: Check if user can view this listing
+$is_admin = isset($_SESSION['user']['role']) && $_SESSION['user']['role'] === 'admin';
+$is_landlord = isset($_SESSION['user']['role']) && $_SESSION['user']['role'] === 'landlord';
+$is_owner = isset($_SESSION['user']['id']) && $_SESSION['user']['id'] == $listing['user_id'];
+
+// Only show active/available listings to non-admins who don't own the listing
+if (!$is_admin && !$is_owner && !in_array($listing['status'], ['active', 'available'])) {
+    $_SESSION['error'] = 'This listing is not available for viewing. It may be pending approval or has been removed.';
+    header('Location: /board-in/pages/search.php');
+    exit;
+}
+
+// Show status banner for admin/owner
+$show_status_banner = ($is_admin || $is_owner) && !in_array($listing['status'], ['active', 'available']);
 
 // photos
 $photos = [];
@@ -39,7 +55,7 @@ if ($res3) $amen = $res3->fetch_assoc();
 
 // reviews
 $reviews = [];
-$stmt4 = $conn->prepare('SELECT r.*, u.full_name FROM reviews r LEFT JOIN users u ON u.id = r.student_id WHERE r.listing_id = ? ORDER BY r.created_at DESC');
+$stmt4 = $conn->prepare('SELECT r.*, u.full_name FROM reviews r LEFT JOIN users u ON u.id = r.student_id WHERE r.listing_id = ? AND r.status = "approved" ORDER BY r.created_at DESC');
 $stmt4->bind_param('i', $id);
 $stmt4->execute();
 $res4 = $stmt4->get_result();
@@ -53,22 +69,46 @@ if (!empty($reviews)) {
 }
 ?>
 
+<!-- Status Banner for Admin/Owner -->
+<?php if ($show_status_banner): ?>
+<div class="container mt-3">
+    <div class="alert alert-<?php echo $listing['status'] === 'pending' ? 'warning' : 'danger'; ?> d-flex align-items-center">
+        <i class="bi bi-<?php echo $listing['status'] === 'pending' ? 'clock' : 'x-circle'; ?> me-2 fs-4"></i>
+        <div class="flex-grow-1">
+            <strong>Listing Status: <?php echo ucfirst($listing['status']); ?></strong>
+            <?php if ($listing['status'] === 'pending'): ?>
+                <p class="mb-0">This listing is awaiting admin approval and is not visible to students yet.</p>
+            <?php elseif ($listing['status'] === 'rejected'): ?>
+                <p class="mb-0">This listing has been rejected by an administrator and is not visible to students.</p>
+            <?php else: ?>
+                <p class="mb-0">This listing is currently not visible to students.</p>
+            <?php endif; ?>
+        </div>
+        <?php if ($is_admin): ?>
+            <a href="/board-in/admin/manage-listings.php" class="btn btn-sm btn-light ms-3">
+                <i class="bi bi-gear"></i> Manage
+            </a>
+        <?php endif; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <!-- Hero Image Section -->
 <div class="container-fluid px-0 mb-4">
     <?php if (!empty($photos)): ?>
         <div class="photo-gallery">
             <?php foreach (array_slice($photos, 0, 5) as $idx => $p): ?>
                 <div class="photo-gallery-item <?php echo $idx === 0 ? 'photo-gallery-primary' : ''; ?>">
-                    <img src="<?php echo esc_attr($p['photo_url']); ?>" 
-                         alt="<?php echo esc_attr($listing['title']); ?>" 
+                    <img src="<?php echo htmlspecialchars($p['photo_url']); ?>" 
+                         alt="<?php echo htmlspecialchars($listing['title']); ?>" 
                          class="w-100 h-100 object-fit-cover">
                 </div>
             <?php endforeach; ?>
         </div>
     <?php else: ?>
         <div class="photo-gallery-item" style="height: 400px;">
-            <img src="https://source.unsplash.com/1200x600/?boarding-house" 
-                 alt="<?php echo esc_attr($listing['title']); ?>" 
+            <img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=1200&h=600&fit=crop" 
+                 alt="<?php echo htmlspecialchars($listing['title']); ?>" 
                  class="w-100 h-100 object-fit-cover">
         </div>
     <?php endif; ?>
@@ -82,10 +122,10 @@ if (!empty($reviews)) {
             <div class="mb-4">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
-                        <h1 class="mb-2"><?php echo esc_attr($listing['title']); ?></h1>
+                        <h1 class="mb-2"><?php echo htmlspecialchars($listing['title']); ?></h1>
                         <p class="text-muted mb-0">
                             <i class="bi bi-geo-alt-fill text-primary"></i>
-                            <?php echo nl2br(esc_attr($listing['address'])); ?>
+                            <?php echo nl2br(htmlspecialchars($listing['address'])); ?>
                         </p>
                     </div>
                     <?php if ($avgRating > 0): ?>
@@ -130,7 +170,7 @@ if (!empty($reviews)) {
                     </div>
                     <h3 class="info-section-title">About This Place</h3>
                 </div>
-                <p class="text-muted lh-lg"><?php echo nl2br(esc_attr($listing['description'])); ?></p>
+                <p class="text-muted lh-lg"><?php echo nl2br(htmlspecialchars($listing['description'])); ?></p>
             </div>
 
             <!-- Amenities Section -->
@@ -198,6 +238,7 @@ if (!empty($reviews)) {
             </div>
 
             <!-- House Rules Section -->
+            <?php if (!empty($listing['house_rules'])): ?>
             <div class="info-section">
                 <div class="info-section-header">
                     <div class="info-section-icon">
@@ -205,8 +246,9 @@ if (!empty($reviews)) {
                     </div>
                     <h3 class="info-section-title">House Rules</h3>
                 </div>
-                <p class="text-muted lh-lg"><?php echo nl2br(esc_attr($listing['house_rules'])); ?></p>
+                <p class="text-muted lh-lg"><?php echo nl2br(htmlspecialchars($listing['house_rules'])); ?></p>
             </div>
+            <?php endif; ?>
 
             <!-- Location Section -->
             <div class="info-section">
@@ -221,7 +263,7 @@ if (!empty($reviews)) {
                 </div>
                 <p class="text-muted">
                     <i class="bi bi-geo-alt-fill text-primary me-2"></i>
-                    <?php echo nl2br(esc_attr($listing['address'])); ?>
+                    <?php echo nl2br(htmlspecialchars($listing['address'])); ?>
                 </p>
             </div>
 
@@ -244,7 +286,7 @@ if (!empty($reviews)) {
                                 <div class="flex-grow-1">
                                     <div class="d-flex justify-content-between align-items-start">
                                         <div>
-                                            <h6 class="mb-1 fw-bold"><?php echo esc_attr($rv['full_name'] ?? 'Student'); ?></h6>
+                                            <h6 class="mb-1 fw-bold"><?php echo htmlspecialchars($rv['full_name'] ?? 'Student'); ?></h6>
                                             <div class="review-meta">
                                                 <div class="rating-stars">
                                                     <?php for ($i = 1; $i <= 5; $i++): ?>
@@ -255,7 +297,7 @@ if (!empty($reviews)) {
                                             </div>
                                         </div>
                                     </div>
-                                    <p class="text-muted mb-0 mt-2"><?php echo nl2br(esc_attr($rv['comment'])); ?></p>
+                                    <p class="text-muted mb-0 mt-2"><?php echo nl2br(htmlspecialchars($rv['comment'])); ?></p>
                                 </div>
                             </div>
                         </div>
@@ -283,7 +325,7 @@ if (!empty($reviews)) {
                     </div>
                     <div>
                         <small class="text-muted d-block">Landlord</small>
-                        <strong><?php echo esc_attr($listing['landlord_name'] ?? 'Owner'); ?></strong>
+                        <strong><?php echo htmlspecialchars($listing['landlord_name'] ?? 'Owner'); ?></strong>
                     </div>
                 </div>
 
@@ -293,18 +335,22 @@ if (!empty($reviews)) {
                     </div>
                     <div>
                         <small class="text-muted d-block">Phone</small>
-                        <strong><?php echo esc_attr($listing['landlord_contact'] ?? 'Not available'); ?></strong>
+                        <strong><?php echo htmlspecialchars($listing['contact_phone'] ?? $listing['landlord_contact'] ?? 'Not available'); ?></strong>
                     </div>
                 </div>
 
-                <?php if ($listing['available_rooms'] > 0): ?>
+                <?php if ($listing['available_rooms'] > 0 && in_array($listing['status'], ['active', 'available'])): ?>
                     <a href="/board-in/student/booking.php?id=<?php echo $listing['id']; ?>" 
                        class="btn btn-primary w-100 btn-lg mt-3">
                         <i class="bi bi-calendar-check me-2"></i>Book Now
                     </a>
-                <?php else: ?>
+                <?php elseif ($listing['available_rooms'] == 0): ?>
                     <button class="btn btn-secondary w-100 btn-lg mt-3" disabled>
                         <i class="bi bi-x-circle me-2"></i>Fully Booked
+                    </button>
+                <?php else: ?>
+                    <button class="btn btn-secondary w-100 btn-lg mt-3" disabled>
+                        <i class="bi bi-clock me-2"></i>Pending Approval
                     </button>
                 <?php endif; ?>
 

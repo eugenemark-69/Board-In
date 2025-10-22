@@ -29,6 +29,15 @@ $where = [];
 $bind_types = '';
 $bind_values = [];
 
+// CRITICAL FIX: Only show active/available listings to students
+// Admins can see all, but students should only see approved listings
+$is_admin = isset($_SESSION['user']['role']) && $_SESSION['user']['role'] === 'admin';
+
+if (!$is_admin) {
+    // Students/guests can only see active or available listings
+    $where[] = "(bh.status = 'active' OR bh.status = 'available')";
+}
+
 if ($q !== '') {
 	$where[] = '(bh.title LIKE ? OR bh.description LIKE ?)';
 	$like = '%' . $q . '%';
@@ -140,7 +149,15 @@ $pages = max(1, ceil($total / $perPage));
 }
 </style>
 
+<div class="container mt-4">
 <h2>Search Listings</h2>
+<?php if ($is_admin): ?>
+	<div class="alert alert-info">
+		<i class="bi bi-info-circle"></i> <strong>Admin View:</strong> You can see all listings including pending ones. 
+		<a href="/board-in/admin/manage-listings.php" class="alert-link">Manage Listings</a>
+	</div>
+<?php endif; ?>
+
 <form class="mb-4" method="get">
 	<div class="row g-2 align-items-center">
 		<div class="col-md-6">
@@ -178,30 +195,45 @@ $pages = max(1, ceil($total / $perPage));
 	</div>
 </form>
 
- <?php if ($res->num_rows === 0): ?>
-	<p>No results found.</p>
+<?php if ($res->num_rows === 0): ?>
+	<div class="alert alert-warning">
+		<i class="bi bi-search"></i> No approved listings found. 
+		<?php if (!$is_admin): ?>
+			All listings must be approved by an admin before they appear in search results.
+		<?php endif; ?>
+	</div>
 <?php else: ?>
 	<div class="row">
 	<?php while ($row = $res->fetch_assoc()): ?>
-		<div class="col-md-4">
-			<div class="card mb-3">
-					<?php
-					// Determine which image to use
-					if (!empty($row['image'])) {
-    				// If a full image path is stored on the boarding_houses table
-    					$localImg = $row['image'];
-					} elseif (!empty($row['filename'])) {
-    				// If filename is stored in the images table
-    					$localImg = '/board-in/uploads/listings/' . $row['filename'];
-					} else {
-    				// Fallback to Unsplash
-    					$localImg = unsplash_url('boarding-house', 600, 400);
+		<div class="col-md-4 mb-4">
+			<div class="card">
+				<?php
+				// Determine which image to use
+				if (!empty($row['image'])) {
+					// If a full image path is stored on the boarding_houses table
+					$localImg = $row['image'];
+				} elseif (!empty($row['filename'])) {
+					// If filename is stored in the images table
+					$localImg = '/board-in/uploads/listings/' . $row['filename'];
+				} else {
+					// Fallback to Unsplash
+					$localImg = 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600&h=400&fit=crop';
 				}
 				?>
 				<img src="<?php echo htmlspecialchars($localImg); ?>" class="card-img-top listing-thumb" alt="Boarding House Image">
 
 				<div class="card-body">
-					<h5 class="card-title"><?php echo esc_attr($row['title']); ?></h5>
+					<div class="d-flex justify-content-between align-items-start mb-2">
+						<h5 class="card-title mb-0"><?php echo esc_attr($row['title']); ?></h5>
+						<?php if ($is_admin): ?>
+							<span class="badge bg-<?php 
+								echo $row['status'] === 'active' || $row['status'] === 'available' ? 'success' : 
+									 ($row['status'] === 'pending' ? 'warning' : 'secondary'); 
+							?>">
+								<?php echo ucfirst($row['status']); ?>
+							</span>
+						<?php endif; ?>
+					</div>
 					
 					<!-- Location/Address -->
 					<?php if (!empty($row['address']) || !empty($row['location'])): ?>
@@ -271,5 +303,32 @@ $pages = max(1, ceil($total / $perPage));
 		</div>
 	<?php endwhile; ?>
 	</div>
+	
+	<!-- Pagination -->
+	<?php if ($pages > 1): ?>
+		<nav aria-label="Search results pagination">
+			<ul class="pagination justify-content-center">
+				<?php if ($page > 1): ?>
+					<li class="page-item">
+						<a class="page-link" href="?q=<?php echo urlencode($q); ?>&sort=<?php echo $sort; ?>&page=<?php echo $page-1; ?><?php echo $wifiFilter?'&wifi=1':''; ?><?php echo $laundryFilter?'&laundry=1':''; ?><?php echo $kitchenFilter?'&kitchen=1':''; ?><?php echo $bipsuFilter?'&bipsu=1':''; ?>">Previous</a>
+					</li>
+				<?php endif; ?>
+				
+				<?php for ($i = 1; $i <= $pages; $i++): ?>
+					<li class="page-item <?php echo $i === $page ? 'active' : ''; ?>">
+						<a class="page-link" href="?q=<?php echo urlencode($q); ?>&sort=<?php echo $sort; ?>&page=<?php echo $i; ?><?php echo $wifiFilter?'&wifi=1':''; ?><?php echo $laundryFilter?'&laundry=1':''; ?><?php echo $kitchenFilter?'&kitchen=1':''; ?><?php echo $bipsuFilter?'&bipsu=1':''; ?>"><?php echo $i; ?></a>
+					</li>
+				<?php endfor; ?>
+				
+				<?php if ($page < $pages): ?>
+					<li class="page-item">
+						<a class="page-link" href="?q=<?php echo urlencode($q); ?>&sort=<?php echo $sort; ?>&page=<?php echo $page+1; ?><?php echo $wifiFilter?'&wifi=1':''; ?><?php echo $laundryFilter?'&laundry=1':''; ?><?php echo $kitchenFilter?'&kitchen=1':''; ?><?php echo $bipsuFilter?'&bipsu=1':''; ?>">Next</a>
+					</li>
+				<?php endif; ?>
+			</ul>
+		</nav>
 	<?php endif; ?>
+<?php endif; ?>
+</div>
+
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
