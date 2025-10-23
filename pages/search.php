@@ -11,6 +11,9 @@ $offset = ($page - 1) * $perPage;
 // sorting
 $sort = ($_GET['sort'] ?? 'newest') === 'oldest' ? 'oldest' : 'newest';
 
+// Verification filter
+$verifiedOnly = isset($_GET['verified']);
+
 // read checkbox inputs (keep for form state even if DB column missing)
 $wifiFilter = isset($_GET['wifi']);
 $laundryFilter = isset($_GET['laundry']);
@@ -36,6 +39,11 @@ $is_admin = isset($_SESSION['user']['role']) && $_SESSION['user']['role'] === 'a
 if (!$is_admin) {
     // Students/guests can only see active or available listings
     $where[] = "(bh.status = 'active' OR bh.status = 'available')";
+}
+
+// Verified filter
+if ($verifiedOnly) {
+    $where[] = "bh.verification_status = 'verified'";
 }
 
 if ($q !== '') {
@@ -136,6 +144,7 @@ $pages = max(1, ceil($total / $perPage));
 	height: 100%;
 	display: flex;
 	flex-direction: column;
+	position: relative;
 }
 
 .card-body {
@@ -146,6 +155,37 @@ $pages = max(1, ceil($total / $perPage));
 
 .card-body > :last-child {
 	margin-top: auto;
+}
+
+/* Verification Badge Styles */
+.verification-badge {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	z-index: 10;
+	padding: 6px 12px;
+	border-radius: 20px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.verification-badge.verified {
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	color: white;
+}
+
+.verification-badge.unverified {
+	background: #f8f9fa;
+	color: #6c757d;
+	border: 1px solid #dee2e6;
+}
+
+.verification-badge i {
+	font-size: 0.9rem;
 }
 </style>
 
@@ -173,6 +213,15 @@ $pages = max(1, ceil($total / $perPage));
 			</select>
 		</div>
 		<div class="col-md-3">
+			<label class="form-check mb-0">
+				<input class="form-check-input" type="checkbox" name="verified" <?php echo $verifiedOnly ? 'checked' : ''; ?>>
+				<span class="form-check-label"><i class="bi bi-patch-check-fill text-primary"></i> Verified Only</span>
+			</label>
+		</div>
+	</div>
+	
+	<div class="row g-2 mt-2">
+		<div class="col-12">
 			<div class="d-flex gap-2 flex-wrap">
 				<label class="form-check mb-0">
 					<input class="form-check-input" type="checkbox" name="wifi" <?php echo $wifiFilter? 'checked':''; ?>>
@@ -207,6 +256,19 @@ $pages = max(1, ceil($total / $perPage));
 	<?php while ($row = $res->fetch_assoc()): ?>
 		<div class="col-md-4 mb-4">
 			<div class="card">
+				<!-- Verification Badge -->
+				<?php if ($row['verification_status'] === 'verified'): ?>
+					<div class="verification-badge verified">
+						<i class="bi bi-patch-check-fill"></i>
+						<span>Verified</span>
+					</div>
+				<?php else: ?>
+					<div class="verification-badge unverified">
+						<i class="bi bi-shield"></i>
+						<span>Unverified</span>
+					</div>
+				<?php endif; ?>
+				
 				<?php
 				// Determine which image to use
 				if (!empty($row['image'])) {
@@ -310,19 +372,19 @@ $pages = max(1, ceil($total / $perPage));
 			<ul class="pagination justify-content-center">
 				<?php if ($page > 1): ?>
 					<li class="page-item">
-						<a class="page-link" href="?q=<?php echo urlencode($q); ?>&sort=<?php echo $sort; ?>&page=<?php echo $page-1; ?><?php echo $wifiFilter?'&wifi=1':''; ?><?php echo $laundryFilter?'&laundry=1':''; ?><?php echo $kitchenFilter?'&kitchen=1':''; ?><?php echo $bipsuFilter?'&bipsu=1':''; ?>">Previous</a>
+						<a class="page-link" href="?q=<?php echo urlencode($q); ?>&sort=<?php echo $sort; ?>&page=<?php echo $page-1; ?><?php echo $wifiFilter?'&wifi=1':''; ?><?php echo $laundryFilter?'&laundry=1':''; ?><?php echo $kitchenFilter?'&kitchen=1':''; ?><?php echo $bipsuFilter?'&bipsu=1':''; ?><?php echo $verifiedOnly?'&verified=1':''; ?>">Previous</a>
 					</li>
 				<?php endif; ?>
 				
 				<?php for ($i = 1; $i <= $pages; $i++): ?>
 					<li class="page-item <?php echo $i === $page ? 'active' : ''; ?>">
-						<a class="page-link" href="?q=<?php echo urlencode($q); ?>&sort=<?php echo $sort; ?>&page=<?php echo $i; ?><?php echo $wifiFilter?'&wifi=1':''; ?><?php echo $laundryFilter?'&laundry=1':''; ?><?php echo $kitchenFilter?'&kitchen=1':''; ?><?php echo $bipsuFilter?'&bipsu=1':''; ?>"><?php echo $i; ?></a>
+						<a class="page-link" href="?q=<?php echo urlencode($q); ?>&sort=<?php echo $sort; ?>&page=<?php echo $i; ?><?php echo $wifiFilter?'&wifi=1':''; ?><?php echo $laundryFilter?'&laundry=1':''; ?><?php echo $kitchenFilter?'&kitchen=1':''; ?><?php echo $bipsuFilter?'&bipsu=1':''; ?><?php echo $verifiedOnly?'&verified=1':''; ?>"><?php echo $i; ?></a>
 					</li>
 				<?php endfor; ?>
 				
 				<?php if ($page < $pages): ?>
 					<li class="page-item">
-						<a class="page-link" href="?q=<?php echo urlencode($q); ?>&sort=<?php echo $sort; ?>&page=<?php echo $page+1; ?><?php echo $wifiFilter?'&wifi=1':''; ?><?php echo $laundryFilter?'&laundry=1':''; ?><?php echo $kitchenFilter?'&kitchen=1':''; ?><?php echo $bipsuFilter?'&bipsu=1':''; ?>">Next</a>
+						<a class="page-link" href="?q=<?php echo urlencode($q); ?>&sort=<?php echo $sort; ?>&page=<?php echo $page+1; ?><?php echo $wifiFilter?'&wifi=1':''; ?><?php echo $laundryFilter?'&laundry=1':''; ?><?php echo $kitchenFilter?'&kitchen=1':''; ?><?php echo $bipsuFilter?'&bipsu=1':''; ?><?php echo $verifiedOnly?'&verified=1':''; ?>">Next</a>
 					</li>
 				<?php endif; ?>
 			</ul>

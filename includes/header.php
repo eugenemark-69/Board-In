@@ -1,5 +1,6 @@
 <?php
 // header include - call session_start in config/session.php before including
+ob_start(); // Start output buffering
 ?>
 <!doctype html>
 <html lang="en">
@@ -355,9 +356,10 @@
               </li>
             <?php endif; ?>
             <?php if ($ut === 'landlord' || $ut === 'admin'): ?>
+              
               <li class="nav-item">
-                <a class="nav-link" href="/board-in/bh_manager/add-listing.php">
-                  <i class="bi bi-plus-circle me-1"></i>Add Listing
+                <a class="nav-link" href="/board-in/bh_manager/dashboard.php">
+                  <i class="bi bi-plus-circle me-1"></i>manage listings
                 </a>
               </li>
             <?php endif; ?>

@@ -714,7 +714,7 @@ include '../includes/header.php';
                                                         <?= ucfirst($post['status']) ?>
                                                     </span>
                                                 </div>
-                                                <a href="/board-in/pages/details.php?id=<?= $post['id'] ?>" class="btn btn-sm btn-outline-primary mt-3">
+                                                <a href="/board-in/pages/listing.php?id=<?= $post['id'] ?>" class="btn btn-sm btn-outline-primary mt-3">
                                                     <i class="bi bi-eye"></i> View Details
                                                 </a>
                                             </div>

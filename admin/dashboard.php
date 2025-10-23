@@ -88,6 +88,28 @@ $stats = $stmt_stats->fetch_assoc();
             <i class="bi bi-list-check"></i> Manage All Listings
         </a>
     </div>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="bi bi-speedometer2"></i> Admin Dashboard</h2>
+            <p class="text-muted mb-0">Manage pending listing approvals</p>
+        </div>
+        <div class="btn-group">
+            <a href="/board-in/admin/verify-bh-queue.php" class="btn btn-warning">
+                <i class="bi bi-shield-check"></i> Verification Queue
+                <?php
+                // Count pending verifications
+                $count_stmt = $conn->query("SELECT COUNT(*) as count FROM boarding_houses WHERE verification_status = 'pending_verification'");
+                $count = $count_stmt->fetch_assoc()['count'];
+                if ($count > 0):
+                ?>
+                    <span class="badge bg-danger"><?php echo $count; ?></span>
+                <?php endif; ?>
+            </a>
+            <a href="/board-in/admin/manage-listings.php" class="btn btn-primary">
+                <i class="bi bi-list-check"></i> Manage All Listings
+            </a>
+        </div>
+    </div>
 
     <!-- Display flash messages -->
     <?php if (isset($_SESSION['error'])): ?>
