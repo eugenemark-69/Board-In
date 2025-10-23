@@ -37,6 +37,15 @@ if (!$is_admin && !$is_owner && !in_array($listing['status'], ['active', 'availa
 // Show status banner for admin/owner
 $show_status_banner = ($is_admin || $is_owner) && !in_array($listing['status'], ['active', 'available']);
 
+// Add after line 50
+$can_request_verification = (
+    $is_owner && 
+    in_array($listing['status'], ['active', 'available']) && 
+    $listing['verification_status'] !== 'verified' &&
+    $listing['verification_status'] !== 'pending_verification' &&
+    $listing['verification_rejection_count'] < 3
+);
+
 // photos
 $photos = [];
 $stmt2 = $conn->prepare('SELECT photo_url, is_primary FROM photos WHERE boarding_house_id = ? ORDER BY is_primary DESC, id ASC');
@@ -92,6 +101,50 @@ if (!empty($reviews)) {
     </div>
 </div>
 <?php endif; ?>
+
+<!-- Enhanced Verification Badge with Details -->
+<div class="verification-banner mb-4">
+    <?php if ($listing['verification_status'] === 'verified'): ?>
+        <div class="alert alert-success d-flex align-items-center">
+            <i class="bi bi-patch-check-fill fs-3 me-3"></i>
+            <div class="flex-grow-1">
+                <h6 class="mb-1"><strong>✓ Verified Property</strong></h6>
+                <small>This boarding house has been physically verified by our team on <?php echo date('M d, Y', strtotime($listing['last_verified_at'] ?? $listing['verification_completed_at'])); ?></small>
+            </div>
+        </div>
+    <?php elseif ($listing['verification_status'] === 'pending_verification'): ?>
+        <div class="alert alert-warning d-flex align-items-center">
+            <i class="bi bi-clock-history fs-3 me-3"></i>
+            <div class="flex-grow-1">
+                <h6 class="mb-1"><strong>⏳ Verification Pending</strong></h6>
+                <small>This property is undergoing verification review</small>
+            </div>
+            <?php if ($is_owner): ?>
+                <a href="/board-in/bh_manager/verification-status.php?id=<?php echo $listing['id']; ?>" class="btn btn-sm btn-warning">
+                    Track Status
+                </a>
+            <?php endif; ?>
+        </div>
+    <?php elseif ($can_request_verification): ?>
+        <div class="alert alert-info d-flex align-items-center">
+            <i class="bi bi-shield-exclamation fs-3 me-3"></i>
+            <div class="flex-grow-1">
+                <h6 class="mb-1"><strong>Not Verified</strong></h6>
+                <small>Get verified to build trust with students!</small>
+            </div>
+            <a href="/board-in/bh_manager/request-verification.php?id=<?php echo $listing['id']; ?>" class="btn btn-sm btn-primary">
+                <i class="bi bi-patch-check"></i> Get Verified
+            </a>
+        </div>
+    <?php else: ?>
+        <div class="alert alert-secondary d-flex align-items-center">
+            <i class="bi bi-shield-x fs-3 me-3"></i>
+            <div>
+                <small class="text-muted">Unverified Property</small>
+            </div>
+        </div>
+    <?php endif; ?>
+</div>
 
 <!-- Hero Image Section -->
 <div class="container-fluid px-0 mb-4">

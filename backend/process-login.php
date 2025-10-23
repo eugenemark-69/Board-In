@@ -55,7 +55,7 @@ if ($user && password_verify($password, $user['password'])) {
     session_regenerate_id(true);
     $_SESSION['user'] = ['id' => $user['id'], 'username' => $user['username'] ?? ($user['email'] ?? null), 'email' => $user['email'] ?? null, 'user_type' => $user['user_type'] ?? ($user['role'] ?? null)];
     flash('success', 'Welcome back!');
-    header('Location: /board-in/user/dashboard.php');
+    header('Location: /board-in/pages/index.php');
     exit;
 }
 flash('error', 'Invalid credentials');

@@ -166,3 +166,4 @@
    
   </body>
 </html>
+<?php ob_end_flush(); // End output buffering ?>

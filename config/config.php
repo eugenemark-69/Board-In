@@ -22,13 +22,16 @@ define('PLATFORM_COMMISSION_RATE', 0.03); // 3% commission by default
 define('UPLOAD_DIR', $_SERVER['DOCUMENT_ROOT'] . '/board-in/uploads/');
 define('PROFILE_UPLOAD_DIR', UPLOAD_DIR . 'profiles/');
 define('PROFILE_UPLOAD_URL', '/board-in/uploads/profiles/');
-
+define('VERIFICATION_UPLOAD_DIR', UPLOAD_DIR . 'verification-docs/');
 // Create upload directories if they don't exist
 if (!file_exists(UPLOAD_DIR)) {
     mkdir(UPLOAD_DIR, 0777, true);
 }
 if (!file_exists(PROFILE_UPLOAD_DIR)) {
     mkdir(PROFILE_UPLOAD_DIR, 0777, true);
+}
+if (!file_exists(VERIFICATION_UPLOAD_DIR)) {
+    mkdir(VERIFICATION_UPLOAD_DIR, 0777, true);
 }
 
 // ============================================
@@ -179,6 +182,15 @@ function create_all_tables($conn) {
             contact_name VARCHAR(100),
             contact_email VARCHAR(100),
             status ENUM('active', 'inactive', 'pending', 'rejected', 'available', 'full') DEFAULT 'pending',
+            // In the boarding_houses CREATE TABLE statement, add these columns after 'status':
+            verification_status ENUM('unverified','pending_verification','verified','rejected') DEFAULT 'unverified',
+            verification_requested_at TIMESTAMP NULL DEFAULT NULL,
+            verification_completed_at TIMESTAMP NULL DEFAULT NULL,
+            verification_rejection_count INT DEFAULT 0,
+            verification_notes TEXT DEFAULT NULL,
+            verified_by_admin_id INT DEFAULT NULL,
+            documents_submitted_at TIMESTAMP NULL DEFAULT NULL,
+            last_verified_at TIMESTAMP NULL DEFAULT NULL,
             views INT(11) DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -190,6 +202,8 @@ function create_all_tables($conn) {
             INDEX idx_status (status),
             INDEX idx_user_id (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        
         
         // AMENITIES TABLE
         "CREATE TABLE IF NOT EXISTS amenities (
@@ -206,6 +220,35 @@ function create_all_tables($conn) {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (boarding_house_id) REFERENCES boarding_houses(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        "CREATE TABLE IF NOT EXISTS bh_verification_docs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            bh_id INT NOT NULL,
+            doc_type ENUM('valid_id','business_permit','proof_ownership','barangay_clearance') NOT NULL,
+            file_url VARCHAR(500) NOT NULL,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (bh_id) REFERENCES boarding_houses(id) ON DELETE CASCADE,
+            INDEX idx_bh_id (bh_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        // BH VERIFICATION VISITS TABLE  
+        "CREATE TABLE IF NOT EXISTS bh_verification_visits (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            bh_id INT NOT NULL,
+            scheduled_date DATE DEFAULT NULL,
+            completed_date DATE DEFAULT NULL,
+            verified_by VARCHAR(100) DEFAULT NULL,
+            visit_notes TEXT DEFAULT NULL,
+            photos_match BOOLEAN DEFAULT NULL,
+            amenities_match BOOLEAN DEFAULT NULL,
+            address_confirmed BOOLEAN DEFAULT NULL,
+            status ENUM('scheduled','completed','cancelled') DEFAULT 'scheduled',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (bh_id) REFERENCES boarding_houses(id) ON DELETE CASCADE,
+            INDEX idx_bh_id (bh_id),
+            INDEX idx_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         
         // IMAGES TABLE
