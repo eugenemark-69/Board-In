@@ -1,42 +1,86 @@
 <?php
+
 require_once __DIR__ . '/../config/session.php';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_role(['student', 'admin']);
-require_once __DIR__ . '/../includes/header.php';
 
-$booking_ref = $_GET['ref'] ?? '';
+$booking_ref = trim($_GET['ref'] ?? '');
 
-if (empty($booking_ref)) {
-    flash('error', 'Invalid booking reference');
-    header('Location: /board-in/pages/search.php');
+if ($booking_ref === '') {
+    die('Invalid booking reference - no reference provided');
+}
+
+// First, let's check if the booking exists at all
+$debug_stmt = $conn->prepare('SELECT id, booking_reference, user_id, payment_status FROM bookings WHERE booking_reference = ?');
+$debug_stmt->bind_param('s', $booking_ref);
+$debug_stmt->execute();
+$debug_result = $debug_stmt->get_result();
+$debug_booking = $debug_result->fetch_assoc();
+
+if (!$debug_booking) {
+    error_log("Payment page - Booking not found in database with ref: '$booking_ref'");
+    
+    // Let's see all bookings for this user
+    $all_stmt = $conn->prepare('SELECT id, booking_reference, user_id FROM bookings WHERE user_id = ?');
+    $all_stmt->bind_param('i', $_SESSION['user']['id']);
+    $all_stmt->execute();
+    $all_bookings = $all_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    error_log("Available bookings for user: " . json_encode($all_bookings));
+    
+    flash('error', 'Booking not found. Please check your bookings list.');
+    header('Location: /board-in/student/my-bookings.php');
     exit;
 }
 
-// Get booking details
+if ($debug_booking['user_id'] != $_SESSION['user']['id']) {
+    error_log("Payment page - User mismatch. Booking user: {$debug_booking['user_id']}, Current user: {$_SESSION['user']['id']}");
+    flash('error', 'You do not have permission to pay for this booking');
+    header('Location: /board-in/student/my-bookings.php');
+    exit;
+}
+
+// Get full booking details
 $stmt = $conn->prepare('
-    SELECT b.*, bh.title, bh.address, bh.image, u.full_name AS landlord_name 
+    SELECT b.*, 
+           bh.title, 
+           bh.address, 
+           bh.image,
+           bh.user_id as landlord_user_id,
+           u.full_name AS landlord_name 
     FROM bookings b 
     LEFT JOIN boarding_houses bh ON bh.id = b.bh_id 
-    LEFT JOIN users u ON u.id = b.landlord_id 
+    LEFT JOIN users u ON u.id = bh.user_id 
     WHERE b.booking_reference = ? AND b.user_id = ? 
     LIMIT 1
 ');
 $stmt->bind_param('si', $booking_ref, $_SESSION['user']['id']);
 $stmt->execute();
 $booking = $stmt->get_result()->fetch_assoc();
-
 if (!$booking) {
-    flash('error', 'Booking not found');
-    header('Location: /board-in/pages/search.php');
+    error_log("Payment page - Full booking query failed for ref: '$booking_ref'");
+    flash('error', 'Could not load booking details');
+    header('Location: /board-in/student/my-bookings.php');
     exit;
 }
 
 if ($booking['payment_status'] === 'paid') {
     flash('info', 'This booking has already been paid');
-    header('Location: /board-in/student/booking-confirmation.php?id=' . $booking['id']);
+    header('Location: /board-in/student/booking-details.php?id=' . $booking['id']);
     exit;
 }
+
+// If landlord_id is null, update it from boarding house
+if (empty($booking['landlord_id']) && !empty($booking['landlord_user_id'])) {
+    $update_stmt = $conn->prepare('UPDATE bookings SET landlord_id = ? WHERE id = ?');
+    $update_stmt->bind_param('ii', $booking['landlord_user_id'], $booking['id']);
+    $update_stmt->execute();
+    $booking['landlord_id'] = $booking['landlord_user_id'];
+}
+
+header('Location: payment-success.php');
+
+require_once __DIR__ . '/../includes/header.php';
 ?>
 
 <style>
@@ -82,9 +126,27 @@ if ($booking['payment_status'] === 'paid') {
     font-size: 2.5rem;
     font-weight: 700;
 }
+
+.simulation-badge {
+    background: #ffc107;
+    color: #000;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: inline-block;
+    margin-bottom: 15px;
+}
 </style>
 
 <div class="container mt-4 mb-5">
+    <?php if (PAYMENT_SIMULATION_MODE): ?>
+    <div class="alert alert-warning text-center">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        <strong>SIMULATION MODE</strong> - This is a demo environment for testing purposes only. No real payments will be processed.
+    </div>
+    <?php endif; ?>
+
     <div class="row">
         <!-- Booking Summary -->
         <div class="col-md-5">
@@ -111,7 +173,7 @@ if ($booking['payment_status'] === 'paid') {
                 
                 <div class="mb-3">
                     <small class="text-white-50">Landlord</small>
-                    <h6 class="mb-0"><?php echo esc_attr($booking['landlord_name']); ?></h6>
+                    <h6 class="mb-0"><?php echo esc_attr($booking['landlord_name'] ?? 'N/A'); ?></h6>
                 </div>
                 
                 <div class="mb-3">
@@ -141,8 +203,8 @@ if ($booking['payment_status'] === 'paid') {
             <!-- Security Badge -->
             <div class="alert alert-success">
                 <i class="bi bi-shield-check me-2"></i>
-                <strong>Secure Payment</strong><br>
-                <small>Your payment is protected and encrypted</small>
+                <strong><?php echo PAYMENT_SIMULATION_MODE ? 'Demo Mode' : 'Secure Payment'; ?></strong><br>
+                <small><?php echo PAYMENT_SIMULATION_MODE ? 'Testing environment - No real transactions' : 'Your payment is protected and encrypted'; ?></small>
             </div>
         </div>
 
@@ -151,11 +213,16 @@ if ($booking['payment_status'] === 'paid') {
             <div class="card shadow">
                 <div class="card-header bg-white">
                     <h4 class="mb-0"><i class="bi bi-credit-card me-2"></i>Select Payment Method</h4>
+                    <?php if (PAYMENT_SIMULATION_MODE): ?>
+                    <span class="simulation-badge mt-2">
+                        <i class="bi bi-lightning-fill me-1"></i>DEMO MODE
+                    </span>
+                    <?php endif; ?>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="/board-in/backend/create-payment.php?ref=<?php echo $booking['booking_reference']; ?>" id="paymentForm">
+                    <form method="POST" action="/board-in/backend/create-payment.php?ref=<?= esc_attr($booking['booking_reference']); ?>" id="paymentForm">
                         <input type="hidden" name="booking_id" value="<?php echo $booking['id']; ?>">
-                        <input type="hidden" name="booking_reference" value="<?php echo $booking['booking_reference']; ?>">
+                        <input type="hidden" name="booking_reference" value="<?php echo esc_attr($booking['booking_reference']); ?>">
                         <input type="hidden" name="amount" value="<?php echo $booking['total_amount']; ?>">
                         <input type="hidden" name="payment_method" id="selectedPaymentMethod" value="">
 
@@ -166,7 +233,7 @@ if ($booking['payment_status'] === 'paid') {
                                 <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/GCash_logo.svg/1200px-GCash_logo.svg.png" 
                                      class="payment-logo me-3" alt="GCash">
                                 <div class="flex-grow-1">
-                                    <h6 class="mb-1">GCash</h6>
+                                    <h6 class="mb-1">GCash <?php echo PAYMENT_SIMULATION_MODE ? '<span class="badge bg-warning text-dark ms-2">DEMO</span>' : ''; ?></h6>
                                     <p class="payment-info mb-0">Pay using your GCash wallet instantly</p>
                                 </div>
                                 <i class="bi bi-circle" style="font-size: 1.5rem; color: #ddd;"></i>
@@ -181,7 +248,7 @@ if ($booking['payment_status'] === 'paid') {
                                 <img src="https://www.paymaya.com/assets/images/paymaya-logo.svg" 
                                      class="payment-logo me-3" alt="PayMaya">
                                 <div class="flex-grow-1">
-                                    <h6 class="mb-1">PayMaya</h6>
+                                    <h6 class="mb-1">PayMaya <?php echo PAYMENT_SIMULATION_MODE ? '<span class="badge bg-warning text-dark ms-2">DEMO</span>' : ''; ?></h6>
                                     <p class="payment-info mb-0">Pay using your PayMaya account</p>
                                 </div>
                                 <i class="bi bi-circle" style="font-size: 1.5rem; color: #ddd;"></i>
@@ -196,7 +263,7 @@ if ($booking['payment_status'] === 'paid') {
                                 <img src="https://upload.wikimedia.org/wikipedia/commons/8/84/GrabPay_logo.svg" 
                                      class="payment-logo me-3" alt="GrabPay">
                                 <div class="flex-grow-1">
-                                    <h6 class="mb-1">GrabPay</h6>
+                                    <h6 class="mb-1">GrabPay <?php echo PAYMENT_SIMULATION_MODE ? '<span class="badge bg-warning text-dark ms-2">DEMO</span>' : ''; ?></h6>
                                     <p class="payment-info mb-0">Pay using your GrabPay wallet</p>
                                 </div>
                                 <i class="bi bi-circle" style="font-size: 1.5rem; color: #ddd;"></i>
@@ -210,7 +277,7 @@ if ($booking['payment_status'] === 'paid') {
                             <div class="d-flex align-items-center">
                                 <i class="bi bi-credit-card payment-logo me-3" style="font-size: 2.5rem;"></i>
                                 <div class="flex-grow-1">
-                                    <h6 class="mb-1">Credit/Debit Card</h6>
+                                    <h6 class="mb-1">Credit/Debit Card <?php echo PAYMENT_SIMULATION_MODE ? '<span class="badge bg-warning text-dark ms-2">DEMO</span>' : ''; ?></h6>
                                     <p class="payment-info mb-0">Visa, Mastercard, JCB, American Express</p>
                                 </div>
                                 <i class="bi bi-circle" style="font-size: 1.5rem; color: #ddd;"></i>
@@ -219,7 +286,7 @@ if ($booking['payment_status'] === 'paid') {
                         <?php endif; ?>
 
                         <button type="submit" class="btn btn-primary btn-lg w-100 mt-4" id="payBtn" disabled>
-                            <i class="bi bi-lock-fill me-2"></i>Proceed to Payment
+                            <i class="bi bi-lock-fill me-2"></i><?php echo PAYMENT_SIMULATION_MODE ? 'Simulate Payment' : 'Proceed to Payment'; ?>
                         </button>
                     </form>
 
@@ -234,7 +301,16 @@ if ($booking['payment_status'] === 'paid') {
             <!-- Payment Instructions -->
             <div class="card mt-3">
                 <div class="card-body">
-                    <h6 class="card-title"><i class="bi bi-info-circle me-2"></i>Payment Instructions</h6>
+                    <h6 class="card-title"><i class="bi bi-info-circle me-2"></i><?php echo PAYMENT_SIMULATION_MODE ? 'Demo Instructions' : 'Payment Instructions'; ?></h6>
+                    <?php if (PAYMENT_SIMULATION_MODE): ?>
+                    <ol class="mb-0 small">
+                        <li>Select your preferred payment method above</li>
+                        <li>Click "Simulate Payment" button</li>
+                        <li>You'll see a simulated payment gateway screen</li>
+                        <li>Choose to simulate success or failure</li>
+                        <li>The system will process as if a real payment occurred</li>
+                    </ol>
+                    <?php else: ?>
                     <ol class="mb-0 small">
                         <li>Select your preferred payment method above</li>
                         <li>Click "Proceed to Payment" button</li>
@@ -242,6 +318,7 @@ if ($booking['payment_status'] === 'paid') {
                         <li>Complete the payment securely</li>
                         <li>You'll receive a confirmation after successful payment</li>
                     </ol>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>

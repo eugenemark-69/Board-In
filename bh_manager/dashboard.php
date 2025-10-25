@@ -3,9 +3,38 @@ require_once __DIR__ . '/../config/session.php';
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_role(['landlord','admin']);
-require_once __DIR__ . '/../includes/header.php';
 
 $user_id = $_SESSION['user']['id'];
+
+// Handle booking acceptance
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accept_booking'])) {
+    $booking_id = intval($_POST['booking_id']);
+    
+    // Verify this booking belongs to the landlord
+    $stmt = $conn->prepare('SELECT id FROM bookings WHERE id = ? AND landlord_id = ? AND booking_status = "pending"');
+    $stmt->bind_param('ii', $booking_id, $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        // Update booking status to confirmed and payment status to paid
+        $stmt = $conn->prepare('UPDATE bookings SET booking_status = "confirmed", payment_status = "paid", updated_at = NOW() WHERE id = ?');
+        $stmt->bind_param('i', $booking_id);
+        
+        if ($stmt->execute()) {
+            $_SESSION['success'] = "Booking accepted successfully!";
+        } else {
+            $_SESSION['error'] = "Failed to accept booking.";
+        }
+    } else {
+        $_SESSION['error'] = "Invalid booking or already processed.";
+    }
+    
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
+}
+
+require_once __DIR__ . '/../includes/header.php';
 
 // Listings summary - FIXED: Changed manager_id to user_id
 $stmt = $conn->prepare('SELECT COUNT(*) AS total, SUM(CASE WHEN status = "available" OR status = "active" THEN 1 ELSE 0 END) AS available FROM boarding_houses WHERE user_id = ?');
@@ -55,6 +84,20 @@ $listings = $stmt->get_result();
 
 <div class="container mt-4">
   <h2><i class="bi bi-speedometer2"></i> Landlord Dashboard</h2>
+  
+  <?php if (isset($_SESSION['success'])): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+      <?php echo htmlspecialchars($_SESSION['success']); unset($_SESSION['success']); ?>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <?php endif; ?>
+  
+  <?php if (isset($_SESSION['error'])): ?>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <?php echo htmlspecialchars($_SESSION['error']); unset($_SESSION['error']); ?>
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  <?php endif; ?>
   
   <!-- Stats Cards -->
   <div class="row my-3">
@@ -191,12 +234,13 @@ $listings = $stmt->get_result();
           <th>Payment</th>
           <th>Status</th>
           <th>Created</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
         <?php if ($recentBookings->num_rows === 0): ?>
           <tr>
-            <td colspan="8" class="text-center text-muted">No bookings yet</td>
+            <td colspan="9" class="text-center text-muted">No bookings yet</td>
           </tr>
         <?php else: ?>
           <?php while ($b = $recentBookings->fetch_assoc()): ?>
@@ -217,6 +261,19 @@ $listings = $stmt->get_result();
                 </span>
               </td>
               <td><?php echo date('M d, Y', strtotime($b['created_at'])); ?></td>
+              <td>
+                <?php if ($b['booking_status'] === 'pending'): ?>
+                  <form method="POST" style="display: inline;">
+                    <input type="hidden" name="booking_id" value="<?php echo $b['id']; ?>">
+                    <button type="submit" name="accept_booking" class="btn btn-sm btn-success" 
+                            onclick="return confirm('Accept this booking and mark as paid?')">
+                      <i class="bi bi-check-circle"></i> Accept
+                    </button>
+                  </form>
+                <?php else: ?>
+                  <span class="text-muted">—</span>
+                <?php endif; ?>
+              </td>
             </tr>
           <?php endwhile; ?>
         <?php endif; ?>
