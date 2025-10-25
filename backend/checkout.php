@@ -224,7 +224,7 @@ if ($booking['payment_status'] === 'paid') {
                     </form>
 
                     <div class="mt-4 text-center">
-                        <a href="/board-in/student/my-bookings.php" class="btn btn-link">
+                        <a href="/board-in/pages/my-bookings.php" class="btn btn-link">
                             <i class="bi bi-arrow-left me-1"></i>Back to My Bookings
                         </a>
                     </div>

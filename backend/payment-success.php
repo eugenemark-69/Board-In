@@ -9,7 +9,7 @@ $booking_id = intval($_GET['booking_id'] ?? 12);
 // exit;
 if ($booking_id <= 0) {
     flash('error', 'Invalid booking ID');
-    header('Location: /board-in/student/my-bookings.php');
+    header('Location: /board-in/pages/my-bookings.php');
     exit;
 }
 
@@ -31,7 +31,7 @@ $booking = $stmt->get_result()->fetch_assoc();
 
 if (!$booking) {
     flash('error', 'Booking not found');
-    header('Location: /board-in/student/my-bookings.php');
+    header('Location: /board-in/pages/my-bookings.php');
     exit;
 }
 
@@ -140,7 +140,7 @@ require_once __DIR__ . '/../includes/header.php';
                                class="btn btn-primary btn-lg">
                                 <i class="bi bi-file-text me-2"></i>View Booking Details
                             </a>
-                            <a href="/board-in/student/my-bookings.php" class="btn btn-outline-primary btn-lg">
+                            <a href="/board-in/pages/my-bookings.php" class="btn btn-outline-primary btn-lg">
                                 <i class="bi bi-list-ul me-2"></i>My Bookings
                             </a>
                         </div>

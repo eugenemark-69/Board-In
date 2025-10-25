@@ -44,7 +44,7 @@ $bookings = $stmt->get_result();
             <i class="bi bi-info-circle-fill me-2"></i>
             You haven't made any bookings yet.
             <div class="mt-3">
-                <a href="/board-in/pages/listings.php" class="btn btn-primary">
+                <a href="/board-in/pages/search.php" class="btn btn-primary">
                     <i class="bi bi-search"></i> Browse Listings
                 </a>
             </div>
