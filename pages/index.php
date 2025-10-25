@@ -2,23 +2,46 @@
 require_once __DIR__ . '/../config/session.php';
 require_once __DIR__ . '/../includes/header.php';
 
-
-// If user is not logged in, CTAs that lead to searching should direct to sign up
 $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board-in/user/register.php';
 ?>
 
 <style>
-/* Hero Section */
+/* Hero Section with Advanced Effects */
 .hero-section {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 90vh;
-    display: flex;
-    align-items: center;
-    position: relative;
-    overflow: hidden;
+    background: linear-gradient(135deg, #cf444bff 0%, #764ba2 100%);
+min-height: 100vh;
+display: flex;
+align-items: center;
+position: relative;
+overflow: hidden;
+width: 100vw;
+margin-left: calc(-50vw + 50%);
+margin-right: calc(-50vw + 50%);
+left: 0;
+right: 0;
 }
 
+/* Animated gradient background */
 .hero-section::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: 
+        radial-gradient(circle at 20% 50%, rgba(223, 226, 8, 0.15) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(7, 111, 172, 0.1) 0%, transparent 50%);
+    animation: gradientShift 15s ease infinite;
+}
+
+@keyframes gradientShift {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    50% { transform: translate(-5%, -5%) rotate(5deg); }
+}
+
+/* Floating particles */
+.hero-section::after {
     content: '';
     position: absolute;
     top: 0;
@@ -34,11 +57,54 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     to { transform: translateY(-100px); }
 }
 
+/* Gradient orbs */
+.gradient-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.3;
+    animation: orbFloat 20s ease-in-out infinite;
+}
+
+.orb-1 {
+    width: 400px;
+    height: 400px;
+    background: rgba(255, 255, 255, 0.2);
+    top: -200px;
+    left: -100px;
+    animation-delay: 0s;
+}
+
+.orb-2 {
+    width: 300px;
+    height: 300px;
+    background: rgba(255, 255, 255, 0.15);
+    bottom: -150px;
+    right: -50px;
+    animation-delay: 7s;
+}
+
+.orb-3 {
+    width: 250px;
+    height: 250px;
+    background: rgba(255, 255, 255, 0.1);
+    top: 50%;
+    right: 20%;
+    animation-delay: 14s;
+}
+
+@keyframes orbFloat {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -30px) scale(1.1); }
+    66% { transform: translate(-20px, 20px) scale(0.9); }
+}
+
 .hero-content {
     position: relative;
     z-index: 2;
 }
 
+/* Text reveal animation */
 .hero-section h1 {
     color: white;
     font-size: 3.5rem;
@@ -46,33 +112,118 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     line-height: 1.2;
     margin-bottom: 1.5rem;
     text-shadow: 0 2px 20px rgba(0,0,0,0.2);
+    opacity: 0;
+    animation: fadeInUp 1s ease-out 0.2s forwards;
+}
+
+/* Staggered word animation */
+.hero-section h1 span {
+    display: inline-block;
+    opacity: 0;
+    animation: wordFade 0.8s ease-out forwards;
+}
+
+.hero-section h1 span:nth-child(1) { animation-delay: 0.1s; }
+.hero-section h1 span:nth-child(2) { animation-delay: 0.2s; }
+.hero-section h1 span:nth-child(3) { animation-delay: 0.3s; }
+.hero-section h1 span:nth-child(4) { animation-delay: 0.4s; }
+
+@keyframes wordFade {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+        filter: blur(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
 }
 
 .hero-section .lead {
     color: rgba(255,255,255,0.95);
     font-size: 1.25rem;
     line-height: 1.8;
+    opacity: 0;
+    animation: fadeInUp 1s ease-out 0.6s forwards;
+}
+
+/* 3D Image Effect */
+.hero-img-wrapper {
+    position: relative;
+    perspective: 1000px;
+    opacity: 0;
+    animation: fadeInUp 1s ease-out 0.8s forwards;
 }
 
 .hero-img {
     border-radius: 30px !important;
-    box-shadow: 0 30px 60px rgba(0,0,0,0.3);
+    box-shadow: 
+        0 30px 60px rgba(0,0,0,0.3),
+        0 0 0 1px rgba(255,255,255,0.1) inset;
     transform: perspective(1000px) rotateY(-5deg);
-    transition: all 0.5s ease;
+    transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+    position: relative;
 }
 
-.hero-img:hover {
-    transform: perspective(1000px) rotateY(0deg) translateY(-10px);
-    box-shadow: 0 40px 80px rgba(0,0,0,0.4);
+/* Shimmer effect on image */
+.hero-img-wrapper::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    z-index: 1;
+    border-radius: 30px;
+    animation: shimmer 3s infinite;
 }
 
+@keyframes shimmer {
+    0% { left: -100%; }
+    50%, 100% { left: 100%; }
+}
+
+.hero-img-wrapper:hover .hero-img {
+    transform: perspective(1000px) rotateY(0deg) translateY(-10px) scale(1.02);
+    box-shadow: 
+        0 40px 80px rgba(0,0,0,0.4),
+        0 0 0 1px rgba(255,255,255,0.2) inset;
+}
+
+/* Enhanced Buttons */
 .btn-hero {
     padding: 15px 40px;
     font-size: 1.1rem;
     border-radius: 50px;
     font-weight: 600;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
     box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    position: relative;
+    overflow: hidden;
+    opacity: 0;
+    animation: fadeInUp 1s ease-out 1s forwards;
+}
+
+/* Button ripple effect */
+.btn-hero::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.btn-hero:hover::before {
+    width: 300px;
+    height: 300px;
 }
 
 .btn-hero-primary {
@@ -83,8 +234,9 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
 
 .btn-hero-primary:hover {
     background: #f8f9fa;
-    transform: translateY(-2px);
+    transform: translateY(-3px) scale(1.02);
     box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+    color: #667eea;
 }
 
 .btn-hero-outline {
@@ -96,23 +248,35 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
 .btn-hero-outline:hover {
     background: white;
     color: #667eea;
-    transform: translateY(-2px);
+    transform: translateY(-3px) scale(1.02);
     box-shadow: 0 15px 40px rgba(0,0,0,0.3);
 }
 
+/* Glassmorphism trust badge */
 .trust-badge {
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    background: rgba(255,255,255,0.2);
-    backdrop-filter: blur(10px);
-    padding: 10px 20px;
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    padding: 12px 24px;
     border-radius: 50px;
     color: white;
     margin-top: 20px;
+    border: 1px solid rgba(255,255,255,0.2);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    opacity: 0;
+    animation: fadeInUp 1s ease-out 1.2s forwards;
+    transition: all 0.3s ease;
 }
 
-/* Stats Section */
+.trust-badge:hover {
+    background: rgba(255,255,255,0.25);
+    transform: translateY(-2px);
+}
+
+/* Floating Stats Section */
 .stats-section {
     margin-top: -80px;
     position: relative;
@@ -125,14 +289,34 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     padding: 40px 30px;
     text-align: center;
     box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-    transition: all 0.4s ease;
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
     border: none;
     height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Hover effect background */
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: 0;
+}
+
+.stat-card:hover::before {
+    opacity: 0.05;
 }
 
 .stat-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+    transform: translateY(-15px) scale(1.02);
+    box-shadow: 0 25px 60px rgba(102, 126, 234, 0.2);
 }
 
 .stat-number {
@@ -144,26 +328,37 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     background-clip: text;
     margin-bottom: 10px;
     display: block;
+    position: relative;
+    z-index: 1;
+    transition: all 0.4s ease;
+}
+
+.stat-card:hover .stat-number {
+    transform: scale(1.1);
+    filter: drop-shadow(0 5px 15px rgba(102, 126, 234, 0.3));
 }
 
 .stat-label {
     color: #6c757d;
     font-size: 1rem;
     font-weight: 500;
+    position: relative;
+    z-index: 1;
 }
 
-/* Features Section */
+/* Feature Cards with Advanced Hover */
 .feature-card {
     background: white;
     border: 2px solid #f0f0f0;
     border-radius: 20px;
     padding: 40px 30px;
-    transition: all 0.4s ease;
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
     height: 100%;
     position: relative;
     overflow: hidden;
 }
 
+/* Top gradient bar */
 .feature-card::before {
     content: '';
     position: absolute;
@@ -173,16 +368,36 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     height: 5px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     transform: scaleX(0);
-    transition: transform 0.4s ease;
+    transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Glow effect */
+.feature-card::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(102, 126, 234, 0.1) 0%, transparent 70%);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+    z-index: 0;
 }
 
 .feature-card:hover::before {
     transform: scaleX(1);
 }
 
+.feature-card:hover::after {
+    width: 500px;
+    height: 500px;
+}
+
 .feature-card:hover {
     border-color: #667eea;
-    transform: translateY(-10px);
+    transform: translateY(-15px);
     box-shadow: 0 20px 50px rgba(102, 126, 234, 0.2);
 }
 
@@ -197,15 +412,20 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     color: white;
     font-size: 2rem;
     margin: 0 auto 20px;
-    transition: all 0.4s ease;
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    position: relative;
+    z-index: 1;
 }
 
+/* Icon pulse effect */
 .feature-card:hover .feature-icon {
-    transform: scale(1.1) rotate(5deg);
-    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+    transform: scale(1.15) rotate(5deg);
+    box-shadow: 
+        0 10px 30px rgba(102, 126, 234, 0.4),
+        0 0 0 10px rgba(102, 126, 234, 0.1);
 }
 
-/* How It Works Section */
+/* How It Works with Connection Lines */
 .how-it-works {
     background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
     position: relative;
@@ -217,11 +437,12 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     padding: 40px 30px;
     text-align: center;
     box-shadow: 0 5px 20px rgba(0,0,0,0.08);
-    transition: all 0.3s ease;
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
     height: 100%;
     position: relative;
 }
 
+/* Animated arrow */
 .step-card::after {
     content: '→';
     position: absolute;
@@ -231,6 +452,12 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     font-size: 2rem;
     color: #667eea;
     opacity: 0.3;
+    transition: all 0.3s ease;
+}
+
+.step-card:hover::after {
+    opacity: 0.8;
+    right: -35px;
 }
 
 .step-card:last-child::after {
@@ -250,6 +477,7 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     font-weight: bold;
     margin: 0 auto 20px;
     box-shadow: 0 5px 20px rgba(102, 126, 234, 0.3);
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .step-card:hover {
@@ -258,16 +486,17 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
 }
 
 .step-card:hover .step-number {
-    transform: scale(1.1);
+    transform: scale(1.15) rotate(360deg);
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.5);
 }
 
-/* Sample Listings */
+/* Listing Cards with Image Zoom */
 .listing-card {
     border: none;
     border-radius: 20px;
     overflow: hidden;
     box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-    transition: all 0.4s ease;
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
     height: 100%;
 }
 
@@ -276,14 +505,18 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     box-shadow: 0 20px 50px rgba(0,0,0,0.15);
 }
 
+.listing-card .position-relative {
+    overflow: hidden;
+}
+
 .listing-card img {
     height: 250px;
     object-fit: cover;
-    transition: transform 0.4s ease;
+    transition: transform 0.6s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .listing-card:hover img {
-    transform: scale(1.1);
+    transform: scale(1.15) rotate(2deg);
 }
 
 .listing-badge {
@@ -291,11 +524,18 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     top: 15px;
     right: 15px;
     background: rgba(255,255,255,0.95);
+    backdrop-filter: blur(10px);
     padding: 8px 15px;
     border-radius: 50px;
     font-weight: 600;
     font-size: 0.9rem;
     box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+}
+
+.listing-card:hover .listing-badge {
+    transform: scale(1.1);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
 }
 
 .listing-price {
@@ -312,7 +552,7 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     gap: 5px;
 }
 
-/* CTA Section */
+/* CTA Section with Animated Background */
 .cta-section {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -321,6 +561,7 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     overflow: hidden;
 }
 
+/* Animated orbs */
 .cta-section::before {
     content: '';
     position: absolute;
@@ -330,6 +571,7 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     height: 600px;
     background: rgba(255,255,255,0.1);
     border-radius: 50%;
+    animation: ctaOrb1 20s ease-in-out infinite;
 }
 
 .cta-section::after {
@@ -341,6 +583,17 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     height: 500px;
     background: rgba(255,255,255,0.08);
     border-radius: 50%;
+    animation: ctaOrb2 25s ease-in-out infinite;
+}
+
+@keyframes ctaOrb1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-50px, 50px) scale(1.2); }
+}
+
+@keyframes ctaOrb2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(50px, -50px) scale(1.1); }
 }
 
 .cta-content {
@@ -352,9 +605,10 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     font-size: 3rem;
     font-weight: 800;
     margin-bottom: 20px;
+    text-shadow: 0 5px 20px rgba(0,0,0,0.2);
 }
 
-/* Testimonials */
+/* Testimonials with Quote Animation */
 .testimonial-card {
     background: white;
     border-radius: 20px;
@@ -362,6 +616,7 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     box-shadow: 0 5px 20px rgba(0,0,0,0.08);
     height: 100%;
     position: relative;
+    transition: all 0.4s ease;
 }
 
 .testimonial-card::before {
@@ -373,6 +628,17 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     color: #667eea;
     opacity: 0.1;
     font-family: Georgia, serif;
+    transition: all 0.4s ease;
+}
+
+.testimonial-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(0,0,0,0.12);
+}
+
+.testimonial-card:hover::before {
+    opacity: 0.2;
+    transform: scale(1.1);
 }
 
 .testimonial-avatar {
@@ -386,13 +652,19 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     color: white;
     font-weight: bold;
     font-size: 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.testimonial-card:hover .testimonial-avatar {
+    transform: scale(1.1);
+    box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
 }
 
 .rating {
     color: #ffc107;
 }
 
-/* Section Headers */
+/* Section Headers with Line Animation */
 .section-header {
     text-align: center;
     margin-bottom: 60px;
@@ -416,12 +688,41 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     height: 4px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     border-radius: 2px;
+    animation: lineExpand 1s ease-out;
+}
+
+@keyframes lineExpand {
+    from { width: 0; }
+    to { width: 80px; }
 }
 
 .section-header p {
     font-size: 1.2rem;
     color: #6c757d;
     margin-top: 25px;
+}
+
+/* Scroll animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-on-scroll {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+}
+
+.animate-on-scroll.visible {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* Responsive */
@@ -450,33 +751,27 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
     .cta-section h2 {
         font-size: 2rem;
     }
-}
 
-/* Animations */
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(30px);
+    .gradient-orb {
+        display: none;
     }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.animate-fade-in {
-    animation: fadeInUp 0.8s ease-out;
 }
 </style>
 
 <!-- Hero Section -->
 <section class="hero-section">
+    <div class="gradient-orb orb-1"></div>
+    <div class="gradient-orb orb-2"></div>
+    <div class="gradient-orb orb-3"></div>
+    
     <div class="container hero-content">
         <div class="row align-items-center">
             <div class="col-lg-6 mb-5 mb-lg-0">
-                <div class="animate-fade-in">
-                    <h1>Find Your Perfect Boarding House in Minutes</h1>
-                    <p class="lead">Board-In connects BIPSU students with verified, affordable boarding houses near campus. No more endless Facebook scrolling – just reliable listings and real reviews.</p>
+                <div>
+                    <h1>
+                        <span>Find</span> <span>Your</span> <span>Perfect</span> <span>Boarding House</span> in Minutes
+                    </h1>
+                    <p class="lead">Board-In connects BIPSU students with verified, affordable boarding houses near campus. No more endless Facebook scrolling — just reliable listings and real reviews.</p>
                     
                     <div class="d-flex gap-3 flex-wrap mt-4">
                         <a href="<?php echo $search_link; ?>" class="btn btn-hero btn-hero-primary">
@@ -512,7 +807,9 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
                 }
                 $hero_fallback = 'https://source.unsplash.com/1200x800/?boarding-house,student';
                 ?>
-                <img src="<?php echo $hero_local; ?>" alt="Boarding house" class="img-fluid hero-img" onerror="this.onerror=null;this.src='<?php echo $hero_fallback; ?>'">
+                <div class="hero-img-wrapper">
+                    <img src="<?php echo $hero_local; ?>" alt="Boarding house" class="img-fluid hero-img" onerror="this.onerror=null;this.src='<?php echo $hero_fallback; ?>'">
+                </div>
             </div>
         </div>
     </div>
@@ -635,7 +932,7 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
                 <div class="step-card">
                     <div class="step-number">1</div>
                     <h5 class="fw-bold mb-3">Search & Filter</h5>
-                    <p class="text-muted">Browse verified boarding houses near BIPSU. Use filters to find exactly what you're looking for – price, amenities, distance, and more.</p>
+                    <p class="text-muted">Browse verified boarding houses near BIPSU. Use filters to find exactly what you're looking for — price, amenities, distance, and more.</p>
                 </div>
             </div>
 
@@ -796,7 +1093,7 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
         <div class="row">
             <div class="col-lg-8 mx-auto text-center cta-content">
                 <h2 class="mb-4">Ready to Find Your New Home?</h2>
-                <p class="fs-5 mb-5">Join hundreds of BIPSU students who've already found their perfect boarding house through Board-In. Start your search today – it's free!</p>
+                <p class="fs-5 mb-5">Join hundreds of BIPSU students who've already found their perfect boarding house through Board-In. Start your search today — it's free!</p>
                 <div class="d-flex gap-3 justify-content-center flex-wrap">
                     <a href="<?php echo $search_link; ?>" class="btn btn-hero btn-hero-primary">
                         <i class="bi bi-search me-2"></i>Browse Listings
@@ -814,5 +1111,61 @@ $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board
         </div>
     </div>
 </section>
+
+<script>
+// Intersection Observer for scroll animations
+document.addEventListener('DOMContentLoaded', function() {
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver(function(entries) {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+            }
+        });
+    }, observerOptions);
+
+    // Add animation class to sections
+    const sections = document.querySelectorAll('.feature-card, .step-card, .listing-card, .testimonial-card, .stat-card');
+    sections.forEach(section => {
+        section.classList.add('animate-on-scroll');
+        observer.observe(section);
+    });
+
+    // Mouse parallax effect on hero image
+    const heroImg = document.querySelector('.hero-img');
+    if (heroImg && window.innerWidth > 768) {
+        document.querySelector('.hero-section').addEventListener('mousemove', function(e) {
+            const x = (e.clientX / window.innerWidth - 0.5) * 20;
+            const y = (e.clientY / window.innerHeight - 0.5) * 20;
+            heroImg.style.transform = `perspective(1000px) rotateY(${-5 + x}deg) rotateX(${y}deg)`;
+        });
+    }
+
+    // Magnetic button effect
+    const buttons = document.querySelectorAll('.btn-hero');
+    buttons.forEach(button => {
+        button.addEventListener('mouseenter', function(e) {
+            button.style.transition = 'transform 0.1s ease';
+        });
+        
+        button.addEventListener('mousemove', function(e) {
+            const rect = button.getBoundingClientRect();
+            const x = e.clientX - rect.left - rect.width / 2;
+            const y = e.clientY - rect.top - rect.height / 2;
+            
+            button.style.transform = `translate(${x * 0.1}px, ${y * 0.1}px) scale(1.02)`;
+        });
+        
+        button.addEventListener('mouseleave', function() {
+            button.style.transition = 'transform 0.3s cubic-bezier(0.23, 1, 0.32, 1)';
+            button.style.transform = 'translate(0, 0) scale(1)';
+        });
+    });
+});
+</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
