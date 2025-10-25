@@ -124,7 +124,7 @@ function create_all_tables($conn) {
             full_name VARCHAR(255) DEFAULT NULL,
             phone VARCHAR(20),
             contact_number VARCHAR(50) DEFAULT NULL,
-            role ENUM('tenant', 'landlord', 'admin') DEFAULT 'tenant',
+            role ENUM('student', 'landlord', 'admin') DEFAULT 'student',
             user_type ENUM('student','landlord','admin') DEFAULT 'student',
             profile_picture VARCHAR(255),
             bio TEXT DEFAULT NULL,
@@ -250,6 +250,19 @@ function create_all_tables($conn) {
             INDEX idx_bh_id (bh_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
 
+
+        // FAVORITES TABLE (Simplified)
+        "CREATE TABLE IF NOT EXISTS favorites (
+            id INT(11) AUTO_INCREMENT PRIMARY KEY,
+            user_id INT(11) NOT NULL,
+            listing_id INT(11) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (listing_id) REFERENCES boarding_houses(id) ON DELETE CASCADE,
+            UNIQUE KEY unique_favorite (user_id, listing_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+        
+        
         // BH VERIFICATION VISITS TABLE  
         "CREATE TABLE IF NOT EXISTS bh_verification_visits (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -298,17 +311,7 @@ function create_all_tables($conn) {
             FOREIGN KEY (boarding_house_id) REFERENCES boarding_houses(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
         
-        // FAVORITES TABLE
-        "CREATE TABLE IF NOT EXISTS favorites (
-            id INT(11) AUTO_INCREMENT PRIMARY KEY,
-            user_id INT(11) NOT NULL,
-            bh_id INT(11) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (bh_id) REFERENCES boarding_houses(id) ON DELETE CASCADE,
-            UNIQUE KEY unique_favorite (user_id, bh_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-        
+ 
         // BOOKINGS TABLE
         "CREATE TABLE IF NOT EXISTS bookings (
             id INT(11) AUTO_INCREMENT PRIMARY KEY,
@@ -431,13 +434,13 @@ function create_all_tables($conn) {
 function insert_sample_data($conn) {
     $sample_users = [
         "INSERT INTO users (username, email, password, full_name, role, user_type, status) VALUES
-        ('admin', 'admin@boardin.com', '\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'System Administrator', 'admin', 'admin', 'active')",
+        ('admin', 'admin@boardin.com', '12345', 'System Administrator', 'admin', 'admin', 'active')",
         
         "INSERT INTO users (username, email, password, full_name, phone, role, user_type, status) VALUES
         ('landlord1', 'landlord@example.com', '\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Doe', '09123456789', 'landlord', 'landlord', 'active')",
         
         "INSERT INTO users (username, email, password, full_name, phone, role, user_type, status) VALUES
-        ('tenant1', 'tenant@example.com', '\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Jane Smith', '09987654321', 'tenant', 'student', 'active')"
+        ('student', 'student@example.com', '123456', 'Jane Smith', '09987654321', 'student', 'student', 'active')"
     ];
     
     foreach ($sample_users as $query) {

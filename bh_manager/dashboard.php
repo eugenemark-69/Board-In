@@ -283,12 +283,6 @@ $listings = $stmt->get_result();
 
   <!-- Action Buttons -->
   <div class="mt-4 mb-5">
-    <a href="/board-in/bh_manager/my-listings.php" class="btn btn-primary">
-      <i class="bi bi-list-ul"></i> Manage All Listings
-    </a>
-    <a href="/board-in/bh_manager/manage-bookings.php" class="btn btn-outline-secondary">
-      <i class="bi bi-calendar3"></i> Manage Bookings
-    </a>
     <a href="/board-in/bh_manager/add-listing.php" class="btn btn-success">
       <i class="bi bi-plus-circle"></i> Add New Listing
     </a>

@@ -80,13 +80,6 @@ $stats = $stmt_stats->fetch_assoc();
 
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2><i class="bi bi-speedometer2"></i> Admin Dashboard</h2>
-            <p class="text-muted mb-0">Manage pending listing approvals</p>
-        </div>
-        <a href="/board-in/admin/manage-listings.php" class="btn btn-primary">
-            <i class="bi bi-list-check"></i> Manage All Listings
-        </a>
     </div>
         <div class="d-flex justify-content-between align-items-center mb-4">
         <div>

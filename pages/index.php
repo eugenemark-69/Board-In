@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config/session.php';
 require_once __DIR__ . '/../includes/header.php';
 
+
 // If user is not logged in, CTAs that lead to searching should direct to sign up
 $search_link = isset($_SESSION['user']) ? '/board-in/pages/search.php' : '/board-in/user/register.php';
 ?>
