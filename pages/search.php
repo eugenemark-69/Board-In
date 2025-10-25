@@ -51,9 +51,12 @@ if ($verifiedOnly) {
 }
 
 if ($q !== '') {
-	$where[] = '(bh.title LIKE ? OR bh.description LIKE ?)';
+	$where[] = '(bh.title LIKE ? OR bh.description LIKE ? OR bh.address LIKE ? OR bh.city LIKE ? OR bh.province LIKE ?)';
 	$like = '%' . $q . '%';
-	$bind_types .= 'ss';
+	$bind_types .= 'sssss';
+	$bind_values[] = $like;
+	$bind_values[] = $like;
+	$bind_values[] = $like;
 	$bind_values[] = $like;
 	$bind_values[] = $like;
 }
