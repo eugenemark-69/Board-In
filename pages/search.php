@@ -27,7 +27,11 @@ function column_exists($conn, $table, $column) {
 	return $res && $res->num_rows > 0;
 }
 
-$baseSelect = 'SELECT bh.*, img.filename FROM boarding_houses bh LEFT JOIN images img ON img.listing_id = bh.id';
+$baseSelect = 'SELECT bh.*, img.filename, u.profile_picture, u.full_name as landlord_name 
+               FROM boarding_houses bh 
+               LEFT JOIN images img ON img.listing_id = bh.id 
+               LEFT JOIN users u ON bh.user_id = u.id';
+
 $where = [];
 $bind_types = '';
 $bind_values = [];
@@ -187,7 +191,35 @@ $pages = max(1, ceil($total / $perPage));
 .verification-badge i {
 	font-size: 0.9rem;
 }
+
+/* Landlord Profile Picture Styles */
+.landlord-profile-pic {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+    width: 60px;          /* Increased from 50px */
+    height: 60px;         /* Increased from 50px */
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    overflow: hidden;
+    background: white;
+}
+
+.landlord-profile-pic img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Adjust card body to account for profile picture */
+.card-body {
+    padding-top: 20px; /* Extra space for profile picture overlap */
+}
 </style>
+
+
 
 <div class="container mt-4">
 <h2>Search Listings</h2>
@@ -268,7 +300,22 @@ $pages = max(1, ceil($total / $perPage));
 						<span>Unverified</span>
 					</div>
 				<?php endif; ?>
-				
+
+				<!-- Landlord Profile Picture -->
+				<?php if (!empty($row['profile_picture'])): ?>
+					<div class="landlord-profile-pic">
+						<img src="/board-in/uploads/profiles/<?php echo htmlspecialchars($row['profile_picture']); ?>" 
+							alt="<?php echo htmlspecialchars($row['landlord_name'] ?: 'Landlord'); ?>" 
+							title="<?php echo htmlspecialchars($row['landlord_name'] ?: 'Landlord'); ?>">
+					</div>
+				<?php else: ?>
+					<div class="landlord-profile-pic">
+						<img src="https://ui-avatars.com/api/?name=<?php echo urlencode($row['landlord_name'] ?: 'Landlord'); ?>&size=64&background=667eea&color=fff" 
+							alt="<?php echo htmlspecialchars($row['landlord_name'] ?: 'Landlord'); ?>"
+							title="<?php echo htmlspecialchars($row['landlord_name'] ?: 'Landlord'); ?>">
+					</div>
+				<?php endif; ?>
+								
 				<?php
 				// Determine which image to use
 				if (!empty($row['image'])) {

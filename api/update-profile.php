@@ -6,147 +6,109 @@ header('Content-Type: application/json');
 
 // Check if user is logged in
 if (!isset($_SESSION['user']['id'])) {
-    echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+    echo json_encode(['success' => false, 'message' => 'Not authenticated']);
+    exit;
+}
+
+// Check if it's a POST request
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    echo json_encode(['success' => false, 'message' => 'Invalid request method']);
     exit;
 }
 
 $user_id = $_SESSION['user']['id'];
 
-// Check if file was uploaded
-if (!isset($_FILES['profile_picture']) || $_FILES['profile_picture']['error'] !== UPLOAD_ERR_OK) {
-    echo json_encode(['success' => false, 'message' => 'No file uploaded or upload error']);
+// Get and sanitize form data
+$full_name = trim($_POST['full_name'] ?? '');
+$username = trim($_POST['username'] ?? '');
+$bio = trim($_POST['bio'] ?? '');
+$contact_number = trim($_POST['contact_number'] ?? '');
+$email = trim($_POST['email'] ?? '');
+$address = trim($_POST['address'] ?? '');
+$date_of_birth = $_POST['date_of_birth'] ?? null;
+$gender = $_POST['gender'] ?? null;
+$school = trim($_POST['school'] ?? '');
+$student_id = trim($_POST['student_id'] ?? '');
+$facebook_url = trim($_POST['facebook_url'] ?? '');
+$twitter_url = trim($_POST['twitter_url'] ?? '');
+$linkedin_url = trim($_POST['linkedin_url'] ?? '');
+
+// Validate required fields
+if (empty($username) || empty($email)) {
+    echo json_encode(['success' => false, 'message' => 'Username and email are required']);
     exit;
 }
 
-$file = $_FILES['profile_picture'];
-
-// Validate file type
-$allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-$finfo = finfo_open(FILEINFO_MIME_TYPE);
-$mime_type = finfo_file($finfo, $file['tmp_name']);
-finfo_close($finfo);
-
-if (!in_array($mime_type, $allowed_types)) {
-    echo json_encode(['success' => false, 'message' => 'Invalid file type. Only JPG, PNG, GIF, and WebP are allowed']);
-    exit;
-}
-
-// Validate file size (max 5MB)
-if ($file['size'] > 5 * 1024 * 1024) {
-    echo json_encode(['success' => false, 'message' => 'File size must be less than 5MB']);
-    exit;
-}
-
-// Get file extension
-$extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-
-// Generate unique filename
-$filename = 'profile_' . $user_id . '_' . time() . '.' . $extension;
-$upload_path = PROFILE_UPLOAD_DIR . $filename;
-
-// Delete old profile picture if exists
-$stmt = $conn->prepare("SELECT profile_picture FROM users WHERE id = ?");
-$stmt->bind_param('i', $user_id);
+// Check if username is already taken by another user
+$stmt = $conn->prepare("SELECT id FROM users WHERE username = ? AND id != ?");
+$stmt->bind_param('si', $username, $user_id);
 $stmt->execute();
-$result = $stmt->get_result()->fetch_assoc();
-if ($result['profile_picture'] && file_exists(PROFILE_UPLOAD_DIR . $result['profile_picture'])) {
-    unlink(PROFILE_UPLOAD_DIR . $result['profile_picture']);
+$result = $stmt->get_result();
+if ($result->num_rows > 0) {
+    echo json_encode(['success' => false, 'message' => 'Username is already taken']);
+    exit;
 }
 $stmt->close();
 
-// Move uploaded file
-if (!move_uploaded_file($file['tmp_name'], $upload_path)) {
-    echo json_encode(['success' => false, 'message' => 'Failed to save file']);
+// Check if email is already taken by another user
+$stmt = $conn->prepare("SELECT id FROM users WHERE email = ? AND id != ?");
+$stmt->bind_param('si', $email, $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
+if ($result->num_rows > 0) {
+    echo json_encode(['success' => false, 'message' => 'Email is already taken']);
+    exit;
+}
+$stmt->close();
+
+// Validate email format
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    echo json_encode(['success' => false, 'message' => 'Invalid email format']);
     exit;
 }
 
-// Optimize image (resize if too large)
-optimize_image($upload_path, 500, 500);
+// Validate URLs if provided
+if (!empty($facebook_url) && !filter_var($facebook_url, FILTER_VALIDATE_URL)) {
+    echo json_encode(['success' => false, 'message' => 'Invalid Facebook URL']);
+    exit;
+}
 
-// Update database
-$stmt = $conn->prepare("UPDATE users SET profile_picture = ? WHERE id = ?");
-$stmt->bind_param('si', $filename, $user_id);
+if (!empty($twitter_url) && !filter_var($twitter_url, FILTER_VALIDATE_URL)) {
+    echo json_encode(['success' => false, 'message' => 'Invalid Twitter URL']);
+    exit;
+}
+
+if (!empty($linkedin_url) && !filter_var($linkedin_url, FILTER_VALIDATE_URL)) {
+    echo json_encode(['success' => false, 'message' => 'Invalid LinkedIn URL']);
+    exit;
+}
+
+// Prepare update query
+$query = "UPDATE users SET 
+          full_name = ?, username = ?, email = ?, bio = ?, 
+          contact_number = ?, address = ?, date_of_birth = ?, gender = ?,
+          school = ?, student_id = ?, facebook_url = ?, twitter_url = ?, linkedin_url = ?,
+          updated_at = CURRENT_TIMESTAMP 
+          WHERE id = ?";
+
+$stmt = $conn->prepare($query);
+$stmt->bind_param('sssssssssssssi', 
+    $full_name, $username, $email, $bio,
+    $contact_number, $address, $date_of_birth, $gender,
+    $school, $student_id, $facebook_url, $twitter_url, $linkedin_url,
+    $user_id
+);
 
 if ($stmt->execute()) {
-    $_SESSION['user']['profile_picture'] = $filename;
-    echo json_encode([
-        'success' => true,
-        'message' => 'Profile picture updated successfully',
-        'file' => $filename,
-        'url' => PROFILE_UPLOAD_URL . $filename
-    ]);
+    // Update session data
+    $_SESSION['user']['username'] = $username;
+    $_SESSION['user']['email'] = $email;
+    $_SESSION['user']['full_name'] = $full_name;
+    
+    echo json_encode(['success' => true, 'message' => 'Profile updated successfully']);
 } else {
-    // Delete uploaded file if database update fails
-    unlink($upload_path);
-    echo json_encode(['success' => false, 'message' => 'Database error']);
+    echo json_encode(['success' => false, 'message' => 'Failed to update profile: ' . $conn->error]);
 }
 
 $stmt->close();
-$conn->close();
-
-// Function to optimize and resize image
-function optimize_image($file_path, $max_width, $max_height, $quality = 85) {
-    list($width, $height, $type) = getimagesize($file_path);
-    
-    // Skip if image is already smaller than max dimensions
-    if ($width <= $max_width && $height <= $max_height) {
-        return;
-    }
-    
-    // Calculate new dimensions
-    $ratio = min($max_width / $width, $max_height / $height);
-    $new_width = round($width * $ratio);
-    $new_height = round($height * $ratio);
-    
-    // Create image resource from file
-    switch ($type) {
-        case IMAGETYPE_JPEG:
-            $source = imagecreatefromjpeg($file_path);
-            break;
-        case IMAGETYPE_PNG:
-            $source = imagecreatefrompng($file_path);
-            break;
-        case IMAGETYPE_GIF:
-            $source = imagecreatefromgif($file_path);
-            break;
-        case IMAGETYPE_WEBP:
-            $source = imagecreatefromwebp($file_path);
-            break;
-        default:
-            return;
-    }
-    
-    // Create new image
-    $new_image = imagecreatetruecolor($new_width, $new_height);
-    
-    // Preserve transparency for PNG and GIF
-    if ($type == IMAGETYPE_PNG || $type == IMAGETYPE_GIF) {
-        imagecolortransparent($new_image, imagecolorallocatealpha($new_image, 0, 0, 0, 127));
-        imagealphablending($new_image, false);
-        imagesavealpha($new_image, true);
-    }
-    
-    // Resize
-    imagecopyresampled($new_image, $source, 0, 0, 0, 0, $new_width, $new_height, $width, $height);
-    
-    // Save optimized image
-    switch ($type) {
-        case IMAGETYPE_JPEG:
-            imagejpeg($new_image, $file_path, $quality);
-            break;
-        case IMAGETYPE_PNG:
-            imagepng($new_image, $file_path, floor($quality / 10));
-            break;
-        case IMAGETYPE_GIF:
-            imagegif($new_image, $file_path);
-            break;
-        case IMAGETYPE_WEBP:
-            imagewebp($new_image, $file_path, $quality);
-            break;
-    }
-    
-    // Clean up
-    imagedestroy($source);
-    imagedestroy($new_image);
-}
 ?>

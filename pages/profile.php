@@ -931,8 +931,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const file = e.target.files[0];
             if (file) {
                 // Validate file type
-                if (!file.type.match('image.*')) {
-                    alert('Please select an image file');
+                const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                if (!validTypes.includes(file.type)) {
+                    alert('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
                     return;
                 }
                 
@@ -940,6 +941,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (file.size > 5 * 1024 * 1024) {
                     alert('File size must be less than 5MB');
                     return;
+                }
+                
+                // Show loading state
+                const uploadBtn = document.querySelector('.profile-picture-upload');
+                if (uploadBtn) {
+                    uploadBtn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+                    uploadBtn.style.pointerEvents = 'none';
                 }
                 
                 // Preview image
@@ -958,24 +966,49 @@ document.addEventListener('DOMContentLoaded', function() {
     function uploadProfilePicture(file) {
         const formData = new FormData();
         formData.append('profile_picture', file);
+        formData.append('user_id', '<?= $profile_user_id ?>');
         
         fetch('/board-in/api/upload-profile-picture.php', {
             method: 'POST',
             body: formData
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
         .then(data => {
+            // Reset upload button
+            const uploadBtn = document.querySelector('.profile-picture-upload');
+            if (uploadBtn) {
+                uploadBtn.innerHTML = '<i class="bi bi-camera-fill"></i>';
+                uploadBtn.style.pointerEvents = 'auto';
+            }
+            
             if (data.success) {
-                alert('Profile picture updated successfully!');
-                location.reload();
+                showFlashMessage('Profile picture updated successfully!', 'success');
+                // Update preview with new image path to prevent caching issues
+                if (data.file_path) {
+                    profilePicturePreview.src = data.file_path + '?t=' + new Date().getTime();
+                }
             } else {
-                alert('Error: ' + (data.message || 'Failed to upload picture'));
-                location.reload();
+                showFlashMessage('Error: ' + (data.message || 'Failed to upload picture'), 'error');
+                // Revert to original image on error
+                profilePicturePreview.src = '<?= $profile_picture ?>';
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('An error occurred while uploading the picture');
+            // Reset upload button
+            const uploadBtn = document.querySelector('.profile-picture-upload');
+            if (uploadBtn) {
+                uploadBtn.innerHTML = '<i class="bi bi-camera-fill"></i>';
+                uploadBtn.style.pointerEvents = 'auto';
+            }
+            showFlashMessage('An error occurred while uploading the picture. Please try again.', 'error');
+            // Revert to original image on error
+            profilePicturePreview.src = '<?= $profile_picture ?>';
         });
     }
     
@@ -985,6 +1018,7 @@ document.addEventListener('DOMContentLoaded', function() {
         saveProfileBtn.addEventListener('click', function() {
             const form = document.getElementById('editProfileForm');
             const formData = new FormData(form);
+            formData.append('user_id', '<?= $profile_user_id ?>');
             
             // Disable button to prevent double submission
             saveProfileBtn.disabled = true;
@@ -994,20 +1028,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
-                    alert('Profile updated successfully!');
-                    location.reload();
+                    showFlashMessage('Profile updated successfully!', 'success');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
                 } else {
-                    alert('Error: ' + (data.message || 'Failed to update profile'));
+                    showFlashMessage('Error: ' + (data.message || 'Failed to update profile'), 'error');
                     saveProfileBtn.disabled = false;
                     saveProfileBtn.innerHTML = '<i class="bi bi-check-circle"></i> Save Changes';
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred while updating profile');
+                showFlashMessage('An error occurred while updating profile', 'error');
                 saveProfileBtn.disabled = false;
                 saveProfileBtn.innerHTML = '<i class="bi bi-check-circle"></i> Save Changes';
             });
@@ -1017,11 +1058,89 @@ document.addEventListener('DOMContentLoaded', function() {
     // Bio character counter
     const bioTextarea = document.getElementById('bio');
     if (bioTextarea) {
+        const bioCounter = document.createElement('div');
+        bioCounter.className = 'form-text text-end';
+        bioCounter.innerHTML = `<span id="bioCount">0</span>/500 characters`;
+        bioTextarea.parentNode.appendChild(bioCounter);
+        
         bioTextarea.addEventListener('input', function() {
-            if (this.value.length > 500) {
+            const count = this.value.length;
+            document.getElementById('bioCount').textContent = count;
+            if (count > 500) {
                 this.value = this.value.substring(0, 500);
+                document.getElementById('bioCount').textContent = 500;
             }
         });
+        
+        // Initialize counter
+        document.getElementById('bioCount').textContent = bioTextarea.value.length;
+    }
+    
+    // Flash message function
+    function showFlashMessage(message, type = 'info') {
+        // Remove any existing flash messages
+        const existingFlash = document.querySelector('.flash-message');
+        if (existingFlash) {
+            existingFlash.remove();
+        }
+        
+        const flashDiv = document.createElement('div');
+        flashDiv.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show flash-message`;
+        flashDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        // Add styles for fixed positioning
+        flashDiv.style.position = 'fixed';
+        flashDiv.style.top = '20px';
+        flashDiv.style.right = '20px';
+        flashDiv.style.zIndex = '9999';
+        flashDiv.style.minWidth = '300px';
+        
+        document.body.appendChild(flashDiv);
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (flashDiv.parentNode) {
+                flashDiv.remove();
+            }
+        }, 5000);
+    }
+    
+    // Enhanced form validation
+    const editProfileForm = document.getElementById('editProfileForm');
+    if (editProfileForm) {
+        editProfileForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+        });
+        
+        // Username validation
+        const usernameInput = document.getElementById('username');
+        if (usernameInput) {
+            usernameInput.addEventListener('blur', function() {
+                const username = this.value.trim();
+                if (username.length < 3) {
+                    this.classList.add('is-invalid');
+                } else {
+                    this.classList.remove('is-invalid');
+                }
+            });
+        }
+        
+        // Email validation
+        const emailInput = document.getElementById('email');
+        if (emailInput) {
+            emailInput.addEventListener('blur', function() {
+                const email = this.value.trim();
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    this.classList.add('is-invalid');
+                } else {
+                    this.classList.remove('is-invalid');
+                }
+            });
+        }
     }
     <?php endif; ?>
 });
