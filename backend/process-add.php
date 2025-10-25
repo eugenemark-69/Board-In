@@ -323,7 +323,7 @@ try {
     }
     
     $_SESSION['success'] = "Listing submitted successfully! Your listing is now pending admin approval and will be visible to students once approved.";
-    header('Location: /board-in/bh_manager/my-listings.php');
+    header('Location: /board-in/bh_manager/dashboard.php');
     exit;
     
 } catch (Exception $e) {

@@ -345,7 +345,7 @@ ob_start(); // Start output buffering
 <?php if (isset($_SESSION['user'])): ?>
             <?php $ut = $_SESSION['user']['user_type'] ?? ($_SESSION['user']['role'] ?? null); if ($ut === 'student'): ?>
               <li class="nav-item">
-                <a class="nav-link" href="/board-in/student/booking.php">
+                <a class="nav-link" href="/board-in/pages/my-bookings.php">
                   <i class="bi bi-calendar-check me-1"></i>Bookings
                 </a>
               </li>

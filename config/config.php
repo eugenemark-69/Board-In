@@ -13,16 +13,35 @@ define('DB_PASS', '');
 // Debug mode - set to true on development machines to show full errors (DO NOT enable in production)
 if (!defined('DEBUG')) define('DEBUG', true);
 
+// SIMULATION MODE - Set to true for development/testing without real payment gateway
+define('PAYMENT_SIMULATION_MODE', true);
+
 // Payment / platform settings (set real values in a local config or env)
-define('PLATFORM_GCASH_NUMBER', '');
-define('PAYMENT_PROVIDER_SECRET', ''); // e.g. PayMongo webhook secret or shared token
+define('PLATFORM_GCASH_NUMBER', '09123456789'); // Simulation number
+define('PAYMENT_PROVIDER_SECRET', 'simulation_secret_key');
 define('PLATFORM_COMMISSION_RATE', 0.03); // 3% commission by default
+
+// PayMongo Configuration (Not used in simulation mode)
+define('PAYMONGO_SECRET_KEY', 'sk_test_SIMULATION_MODE');
+define('PAYMONGO_PUBLIC_KEY', 'pk_test_SIMULATION_MODE');
+define('PAYMONGO_WEBHOOK_SECRET', 'whsec_SIMULATION_MODE'); 
+
+define('ENABLE_GCASH', true);
+define('ENABLE_PAYMAYA', true);
+define('ENABLE_CARD', true);
+define('ENABLE_GRAB_PAY', true);
 
 // Upload directories
 define('UPLOAD_DIR', $_SERVER['DOCUMENT_ROOT'] . '/board-in/uploads/');
 define('PROFILE_UPLOAD_DIR', UPLOAD_DIR . 'profiles/');
 define('PROFILE_UPLOAD_URL', '/board-in/uploads/profiles/');
 define('VERIFICATION_UPLOAD_DIR', UPLOAD_DIR . 'verification-docs/');
+
+// URLs
+define('PAYMENT_SUCCESS_URL', '/board-in/backend/payment-success.php');
+define('PAYMENT_FAILED_URL', '/board-in/backend/payment-failed.php');
+define('PAYMENT_WEBHOOK_URL', '/board-in/backend/payment-webhook.php');
+
 // Create upload directories if they don't exist
 if (!file_exists(UPLOAD_DIR)) {
     mkdir(UPLOAD_DIR, 0777, true);
@@ -182,7 +201,6 @@ function create_all_tables($conn) {
             contact_name VARCHAR(100),
             contact_email VARCHAR(100),
             status ENUM('active', 'inactive', 'pending', 'rejected', 'available', 'full') DEFAULT 'pending',
-            // In the boarding_houses CREATE TABLE statement, add these columns after 'status':
             verification_status ENUM('unverified','pending_verification','verified','rejected') DEFAULT 'unverified',
             verification_requested_at TIMESTAMP NULL DEFAULT NULL,
             verification_completed_at TIMESTAMP NULL DEFAULT NULL,
@@ -418,18 +436,6 @@ function insert_sample_data($conn) {
         "INSERT INTO users (username, email, password, full_name, phone, role, user_type, status) VALUES
         ('landlord1', 'landlord@example.com', '\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'John Doe', '09123456789', 'landlord', 'landlord', 'active')",
         
-        "INSERT INTO users (username, email, password, full_name, role, user_type, status)
-            VALUES (
-            'admin',
-            'admin@boardin.com',
-            'admin',
-            'System Administrator',
-            'admin',
-            'admin',
-            'active'
-            )",
-
-
         "INSERT INTO users (username, email, password, full_name, phone, role, user_type, status) VALUES
         ('tenant1', 'tenant@example.com', '\$2y\$10\$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Jane Smith', '09987654321', 'tenant', 'student', 'active')"
     ];
