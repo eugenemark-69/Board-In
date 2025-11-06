@@ -181,7 +181,9 @@ $pages = max(1, ceil($total / $perPage));
 }
 
 .verification-badge.verified {
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+	background: linear-gradient(135deg, #16b123ff 0%, #93cc65ff 100%);
+
 	color: white;
 }
 

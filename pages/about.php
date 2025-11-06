@@ -334,8 +334,9 @@ require_once __DIR__ . '/../includes/header.php';
 }
 
 .gradient-text {
-    background: var(--primary-gradient);
-    -webkit-background-clip: text;
+
+    background: white;
+    -webkit-background-clip: black;
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
