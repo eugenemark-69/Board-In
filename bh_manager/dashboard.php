@@ -57,16 +57,13 @@ $stmt->execute();
 $res = $stmt->get_result();
 $earnings = $res->fetch_assoc();
 
-// Commission owed from landlords table (if exists)
-$commission_owed = 0.00;
-if ($conn->query("SHOW TABLES LIKE 'landlords'")->num_rows > 0) {
-    $stmt = $conn->prepare('SELECT commission_owed FROM landlords WHERE user_id = ? LIMIT 1');
-    $stmt->bind_param('i', $user_id);
-    $stmt->execute();
-    $res = $stmt->get_result();
-    $row = $res->fetch_assoc();
-    if ($row) $commission_owed = floatval($row['commission_owed']);
-}
+// FIXED: Commission owed - Calculate from bookings table instead of landlords table
+$stmt = $conn->prepare('SELECT COALESCE(SUM(commission_amount),0) AS commission_owed FROM bookings WHERE landlord_id = ? AND payment_status = "paid"');
+$stmt->bind_param('i', $user_id);
+$stmt->execute();
+$res = $stmt->get_result();
+$commission_row = $res->fetch_assoc();
+$commission_owed = floatval($commission_row['commission_owed']);
 
 // Recent bookings list - FIXED: Changed boarding_house_id to bh_id
 $stmt = $conn->prepare('SELECT b.id, b.booking_reference, b.total_amount, b.commission_amount, b.payment_status, b.booking_status, b.created_at, u.full_name AS student_name, bh.title AS listing_title FROM bookings b LEFT JOIN users u ON u.id = b.student_id LEFT JOIN boarding_houses bh ON bh.id = b.bh_id WHERE b.landlord_id = ? ORDER BY b.created_at DESC LIMIT 10');
@@ -133,7 +130,7 @@ $listings = $stmt->get_result();
         <div class="card-body">
           <h5 class="card-title">Commission Owed</h5>
           <p class="card-text display-6">₱<?php echo number_format($commission_owed, 2); ?></p>
-          <small>Platform commission pending payout</small>
+          <small>Platform commission from paid bookings</small>
         </div>
       </div>
     </div>
