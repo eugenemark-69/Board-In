@@ -366,6 +366,19 @@ function create_all_tables($conn) {
             FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
+        "CREATE TABLE IF NOT EXISTS comments (
+            id INT(11) AUTO_INCREMENT PRIMARY KEY,
+            bh_id INT(11) NOT NULL,
+            user_id INT(11) NOT NULL,
+            comment TEXT NOT NULL,
+            status ENUM('approved','pending','rejected') DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (bh_id) REFERENCES boarding_houses(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+
         
         // INQUIRIES TABLE
         "CREATE TABLE IF NOT EXISTS inquiries (

@@ -10,6 +10,71 @@ if ($id <= 0) {
     exit;
 }
 
+// Handle review/comment submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_review'])) {
+    if (!isset($_SESSION['user'])) {
+        $_SESSION['error'] = 'Please log in to submit a review or comment';
+        header('Location: /board-in/pages/login.php');
+        exit;
+    }
+
+    $user_id = $_SESSION['user']['id'];
+    $comment = trim($_POST['comment'] ?? '');
+    $rating = isset($_POST['rating']) ? intval($_POST['rating']) : 0;
+
+    // Validate input
+    if (empty($comment)) {
+        $_SESSION['error'] = 'Please write a comment';
+    } elseif (strlen($comment) < 10) {
+        $_SESSION['error'] = 'Comment must be at least 10 characters long';
+    } else {
+        // Check if user has paid booking for this listing (for star ratings)
+        $has_paid_booking = false;
+        if ($rating > 0) {
+            $stmt_booking = $conn->prepare('
+                SELECT id FROM bookings 
+                WHERE bh_id = ? AND user_id = ? AND payment_status = "paid" 
+                AND status IN ("confirmed", "completed")
+                LIMIT 1
+            ');
+            $stmt_booking->bind_param('ii', $id, $user_id);
+            $stmt_booking->execute();
+            $res_booking = $stmt_booking->get_result();
+            $has_paid_booking = $res_booking->num_rows > 0;
+
+            if (!$has_paid_booking) {
+                $_SESSION['error'] = 'Only students with paid bookings can leave star ratings';
+                $rating = 0; // Reset rating if not allowed
+            }
+        }
+
+        // Insert as comment if no rating, or as review if rating exists
+        if ($rating > 0) {
+            // Insert as review
+            $stmt = $conn->prepare('
+                INSERT INTO reviews (bh_id, listing_id, user_id, student_id, rating, comment, status, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, "approved", NOW())
+            ');
+            $stmt->bind_param('iiiiis', $id, $id, $user_id, $user_id, $rating, $comment);
+        } else {
+            // Insert as comment only
+            $stmt = $conn->prepare('
+                INSERT INTO comments (bh_id, user_id, comment, status, created_at) 
+                VALUES (?, ?, ?, "approved", NOW())
+            ');
+            $stmt->bind_param('iis', $id, $user_id, $comment);
+        }
+
+        if ($stmt->execute()) {
+            $_SESSION['success'] = $rating > 0 ? 'Thank you for your review!' : 'Thank you for your comment!';
+            header('Location: ' . $_SERVER['REQUEST_URI']);
+            exit;
+        } else {
+            $_SESSION['error'] = 'Failed to submit. Please try again.';
+        }
+    }
+}
+
 // Enhanced query to include landlord profile picture
 $stmt = $conn->prepare('SELECT bh.*, u.full_name AS landlord_name, u.contact_number AS landlord_contact, u.profile_picture AS landlord_profile_pic FROM boarding_houses bh LEFT JOIN users u ON u.id = bh.manager_id WHERE bh.id = ? LIMIT 1');
 $stmt->bind_param('i', $id);
@@ -46,6 +111,22 @@ $can_request_verification = (
     $listing['verification_rejection_count'] < 3
 );
 
+// Check if current user has paid booking (for review permissions)
+$user_has_paid_booking = false;
+if (isset($_SESSION['user']['id'])) {
+    $user_id = $_SESSION['user']['id'];
+    $stmt_booking = $conn->prepare('
+        SELECT id FROM bookings 
+        WHERE bh_id = ? AND user_id = ? AND payment_status = "paid" 
+        AND status IN ("confirmed", "completed")
+        LIMIT 1
+    ');
+    $stmt_booking->bind_param('ii', $id, $user_id);
+    $stmt_booking->execute();
+    $res_booking = $stmt_booking->get_result();
+    $user_has_paid_booking = $res_booking->num_rows > 0;
+}
+
 // photos
 $photos = [];
 $stmt2 = $conn->prepare('SELECT photo_url, is_primary FROM photos WHERE boarding_house_id = ? ORDER BY is_primary DESC, id ASC');
@@ -62,7 +143,7 @@ $stmt3->execute();
 $res3 = $stmt3->get_result();
 if ($res3) $amen = $res3->fetch_assoc();
 
-// reviews
+// reviews (only from users with paid bookings)
 $reviews = [];
 $stmt4 = $conn->prepare('SELECT r.*, u.full_name FROM reviews r LEFT JOIN users u ON u.id = r.student_id WHERE r.listing_id = ? AND r.status = "approved" ORDER BY r.created_at DESC');
 $stmt4->bind_param('i', $id);
@@ -70,7 +151,15 @@ $stmt4->execute();
 $res4 = $stmt4->get_result();
 while ($r = $res4->fetch_assoc()) $reviews[] = $r;
 
-// Calculate average rating
+// comments (from all users)
+$comments = [];
+$stmt5 = $conn->prepare('SELECT c.*, u.full_name, u.profile_picture FROM comments c LEFT JOIN users u ON u.id = c.user_id WHERE c.bh_id = ? AND c.status = "approved" ORDER BY c.created_at DESC');
+$stmt5->bind_param('i', $id);
+$stmt5->execute();
+$res5 = $stmt5->get_result();
+while ($r = $res5->fetch_assoc()) $comments[] = $r;
+
+// Calculate average rating from reviews only
 $avgRating = 0;
 if (!empty($reviews)) {
     $totalRating = array_sum(array_column($reviews, 'rating'));
@@ -88,17 +177,11 @@ if (isset($_SESSION['user'])) {
     $user_id = $_SESSION['user']['id'];
     $user_role = $_SESSION['user']['role'] ?? '';
     
-    // Debug: Check if user is student
-    error_log("DEBUG: User ID: $user_id, Role: $user_role, Listing ID: $id");
-    
     $stmt_fav = $conn->prepare('SELECT id FROM favorites WHERE user_id = ? AND listing_id = ?');
     $stmt_fav->bind_param('ii', $user_id, $id);
     $stmt_fav->execute();
     $res_fav = $stmt_fav->get_result();
     $is_favorited = $res_fav->num_rows > 0;
-    
-    // Debug: Check favorite result
-    error_log("DEBUG: Favorite found: " . ($is_favorited ? 'YES' : 'NO'));
 }
 
 ?>
@@ -213,66 +296,64 @@ if (isset($_SESSION['user'])) {
         <!-- Main Content -->
         <div class="col-lg-8">
             <!-- Enhanced Header Section -->
-<div class="listing-header fade-in-up">
-    <div class="d-flex justify-content-between align-items-start">
-        <div class="flex-grow-1">
-            <div class="d-flex align-items-start gap-3">
-                <h1 class="listing-title"><?php echo htmlspecialchars($listing['title']); ?></h1>
-                
-                <!-- Heart Favorite Button - Moved to header -->
-                <?php if (isset($_SESSION['user'])): ?>
-                <button id="favoriteBtn" 
-                        class="btn-heart-favorite <?php echo $is_favorited ? 'favorited' : ''; ?>" 
-                        data-listing-id="<?php echo $id; ?>"
-                        title="<?php echo $is_favorited ? 'Remove from favorites' : 'Add to favorites'; ?>">
-                    <i class="bi bi-heart<?php echo $is_favorited ? '-fill' : ''; ?>"></i>
-                </button>
-                <?php endif; ?>
-            </div>
-            
-            <div class="listing-location">
-                <i class="bi bi-geo-alt-fill"></i>
-                <span><?php echo nl2br(htmlspecialchars($listing['address'])); ?></span>
-            </div>
-
-            <div class="price-section">
-                <div class="d-flex align-items-baseline gap-2">
-                    <span class="price-main">₱<?php echo number_format($listing['monthly_rent'], 0); ?></span>
-                    <span class="price-period">/ month</span>
-                </div>
-                
-                <?php if ($avgRating > 0): ?>
-                    <div class="rating-badge">
-                        <div class="rating-stars">
-                            <?php for ($i = 1; $i <= 5; $i++): ?>
-                                <i class="bi bi-star<?php echo $i <= $avgRating ? '-fill' : ''; ?>"></i>
-                            <?php endfor; ?>
+            <div class="listing-header fade-in-up">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-start gap-3">
+                            <h1 class="listing-title"><?php echo htmlspecialchars($listing['title']); ?></h1>
+                            
+                            <!-- Heart Favorite Button - Moved to header -->
+                            <?php if (isset($_SESSION['user'])): ?>
+                            <button id="favoriteBtn" 
+                                    class="btn-heart-favorite <?php echo $is_favorited ? 'favorited' : ''; ?>" 
+                                    data-listing-id="<?php echo $id; ?>"
+                                    title="<?php echo $is_favorited ? 'Remove from favorites' : 'Add to favorites'; ?>">
+                                <i class="bi bi-heart<?php echo $is_favorited ? '-fill' : ''; ?>"></i>
+                            </button>
+                            <?php endif; ?>
                         </div>
-                        <span><?php echo $avgRating; ?></span>
-                        <span class="text-muted">(<?php echo count($reviews); ?> reviews)</span>
+                        
+                        <div class="listing-location">
+                            <i class="bi bi-geo-alt-fill"></i>
+                            <span><?php echo nl2br(htmlspecialchars($listing['address'])); ?></span>
+                        </div>
+
+                        <div class="price-section">
+                            <div class="d-flex align-items-baseline gap-2">
+                                <span class="price-main">₱<?php echo number_format($listing['monthly_rent'], 0); ?></span>
+                                <span class="price-period">/ month</span>
+                            </div>
+                            
+                            <?php if ($avgRating > 0): ?>
+                                <div class="rating-badge">
+                                    <div class="rating-stars">
+                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                            <i class="bi bi-star<?php echo $i <= $avgRating ? '-fill' : ''; ?>"></i>
+                                        <?php endfor; ?>
+                                    </div>
+                                    <span><?php echo $avgRating; ?></span>
+                                    <span class="text-muted">(<?php echo count($reviews); ?> reviews)</span>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <!-- Enhanced Availability Badge -->
+                        <?php 
+                        $available = $listing['available_rooms'];
+                        $total = $listing['total_rooms'];
+                        $availClass = $available == 0 ? 'full' : ($available <= 3 ? 'limited' : 'available');
+                        ?>
+                        <div class="availability-badge <?php echo $availClass; ?>">
+                            <i class="bi bi-<?php echo $available > 0 ? 'check-circle' : 'x-circle'; ?>"></i>
+                            <?php if ($available > 0): ?>
+                                <?php echo $available; ?> of <?php echo $total; ?> rooms available
+                            <?php else: ?>
+                                Fully booked
+                            <?php endif; ?>
+                        </div>
                     </div>
-                <?php endif; ?>
+                </div>
             </div>
-
-            <!-- Enhanced Availability Badge -->
-            <?php 
-            $available = $listing['available_rooms'];
-            $total = $listing['total_rooms'];
-            $availClass = $available == 0 ? 'full' : ($available <= 3 ? 'limited' : 'available');
-            ?>
-            <div class="availability-badge <?php echo $availClass; ?>">
-                <i class="bi bi-<?php echo $available > 0 ? 'check-circle' : 'x-circle'; ?>"></i>
-                <?php if ($available > 0): ?>
-                    <?php echo $available; ?> of <?php echo $total; ?> rooms available
-                <?php else: ?>
-                    Fully booked
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
-</div>
-
-                     
 
             <!-- Enhanced Amenities Section -->
             <div class="info-section-modern fade-in-up">
@@ -351,16 +432,64 @@ if (isset($_SESSION['user'])) {
             </div>
             <?php endif; ?>
 
-            <!-- Enhanced Reviews Section -->
+            <!-- Enhanced Reviews & Comments Section -->
             <div class="info-section-modern fade-in-up">
                 <div class="section-header">
                     <div class="section-icon">
                         <i class="bi bi-chat-quote"></i>
                     </div>
-                    <h3 class="section-title">Student Reviews</h3>
+                    <h3 class="section-title">Reviews & Comments</h3>
                 </div>
 
+                <!-- Review/Comment Form -->
+                <?php if (isset($_SESSION['user'])): ?>
+                <div class="review-form-modern mb-4">
+                    <form method="POST" id="reviewForm">
+                        <div class="form-group">
+                            <label for="comment" class="form-label fw-bold">Share your experience</label>
+                            <textarea class="form-control" id="comment" name="comment" rows="4" 
+                                      placeholder="Share your thoughts about this boarding house..." 
+                                      required></textarea>
+                        </div>
+
+                        <!-- Star Rating (only for users with paid bookings) -->
+                        <?php if ($user_has_paid_booking): ?>
+                        <div class="rating-section mb-3">
+                            <label class="form-label fw-bold">Your Rating</label>
+                            <div class="star-rating">
+                                <?php for ($i = 5; $i >= 1; $i--): ?>
+                                    <input type="radio" id="star<?php echo $i; ?>" name="rating" value="<?php echo $i; ?>" <?php echo $i == 5 ? 'checked' : ''; ?>>
+                                    <label for="star<?php echo $i; ?>" title="<?php echo $i; ?> stars">
+                                        <i class="bi bi-star-fill"></i>
+                                    </label>
+                                <?php endfor; ?>
+                            </div>
+                            <small class="text-muted">Only students with paid bookings can leave star ratings</small>
+                        </div>
+                        <?php else: ?>
+                        <div class="alert alert-info py-2">
+                            <small>
+                                <i class="bi bi-info-circle"></i> 
+                                Only students with paid bookings can leave star ratings. 
+                                You can still share your comments and questions.
+                            </small>
+                        </div>
+                        <?php endif; ?>
+
+                        <button type="submit" name="submit_review" class="btn btn-primary-modern">
+                            <i class="bi bi-send me-2"></i>Submit
+                        </button>
+                    </form>
+                </div>
+                <?php else: ?>
+                <div class="alert alert-info">
+                    <a href="/board-in/pages/login.php" class="alert-link">Log in</a> to share your comments and reviews.
+                </div>
+                <?php endif; ?>
+
+                <!-- Reviews (with ratings) -->
                 <?php if (!empty($reviews)): ?>
+                    <h5 class="mb-3">Student Reviews (<?php echo count($reviews); ?>)</h5>
                     <?php foreach ($reviews as $rv): ?>
                         <div class="review-card-modern">
                             <div class="d-flex align-items-start gap-3">
@@ -375,18 +504,47 @@ if (isset($_SESSION['user'])) {
                                                 <i class="bi bi-star<?php echo $i <= $rv['rating'] ? '-fill' : ''; ?>"></i>
                                             <?php endfor; ?>
                                         </div>
-                                        <span class="text-muted"><?php echo date('M Y', strtotime($rv['created_at'])); ?></span>
+                                        <span class="text-muted"><?php echo date('M j, Y', strtotime($rv['created_at'])); ?></span>
                                     </div>
                                     <p class="text-muted mb-0 mt-2"><?php echo nl2br(htmlspecialchars($rv['comment'])); ?></p>
                                 </div>
                             </div>
                         </div>
                     <?php endforeach; ?>
-                <?php else: ?>
+                <?php endif; ?>
+
+                <!-- Comments (without ratings) -->
+                <?php if (!empty($comments)): ?>
+                    <h5 class="mb-3 mt-4">Comments (<?php echo count($comments); ?>)</h5>
+                    <?php foreach ($comments as $cmt): ?>
+                        <div class="comment-card-modern">
+                            <div class="d-flex align-items-start gap-3">
+                                <div class="comment-avatar-modern">
+                                    <?php 
+                                    if (!empty($cmt['profile_picture'])) {
+                                        echo '<img src="' . PROFILE_UPLOAD_URL . htmlspecialchars($cmt['profile_picture']) . '" alt="' . htmlspecialchars($cmt['full_name']) . '">';
+                                    } else {
+                                        echo strtoupper(substr($cmt['full_name'] ?? 'U', 0, 1));
+                                    }
+                                    ?>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="comment-meta-modern">
+                                        <h6 class="mb-0 fw-bold"><?php echo htmlspecialchars($cmt['full_name'] ?? 'User'); ?></h6>
+                                        <span class="text-muted"><?php echo date('M j, Y', strtotime($cmt['created_at'])); ?></span>
+                                    </div>
+                                    <p class="text-muted mb-0 mt-2"><?php echo nl2br(htmlspecialchars($cmt['comment'])); ?></p>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+
+                <?php if (empty($reviews) && empty($comments)): ?>
                     <div class="text-center py-5">
                         <i class="bi bi-chat fs-1 text-muted mb-3 d-block"></i>
-                        <h4 class="text-muted">No reviews yet</h4>
-                        <p class="text-muted">Be the first to review this boarding house!</p>
+                        <h4 class="text-muted">No reviews or comments yet</h4>
+                        <p class="text-muted">Be the first to share your experience!</p>
                     </div>
                 <?php endif; ?>
             </div>
@@ -447,6 +605,91 @@ if (isset($_SESSION['user'])) {
 </div>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
+
+<!-- Add CSS for the review/comment system -->
+<style>
+.review-form-modern {
+    background: var(--card-bg);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    border: 1px solid var(--border-color);
+}
+
+.star-rating {
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: 0.25rem;
+}
+
+.star-rating input {
+    display: none;
+}
+
+.star-rating label {
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: #ddd;
+    transition: color 0.2s;
+}
+
+.star-rating input:checked ~ label,
+.star-rating label:hover,
+.star-rating label:hover ~ label {
+    color: #ffc107;
+}
+
+.star-rating input:checked + label {
+    color: #ffc107;
+}
+
+.rating-section {
+    padding: 1rem 0;
+}
+
+.comment-card-modern {
+    background: var(--card-bg);
+    border-radius: var(--border-radius);
+    padding: 1.25rem;
+    border: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+}
+
+.comment-avatar-modern {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.comment-avatar-modern img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.comment-meta-modern {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.comment-meta-modern h6 {
+    margin-bottom: 0;
+}
+
+.comment-meta-modern .text-muted {
+    font-size: 0.875rem;
+}
+</style>
 
 <!-- Add JS reference -->
 <script src="/board-in/assets/js/listing.js"></script>
